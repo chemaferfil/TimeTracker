@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Registro - Admin{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h2 class="text-3xl font-bold text-gray-200 mb-6">Editar Registro de Fichaje</h2>
+
+    <div class="bg-gray-900 shadow-md rounded-lg p-6">
+        {# Use standard HTML form, ensure method is POST and action points to the correct endpoint (usually empty for self-submission) #}
+        <form method="POST" action="">
+            {# CSRF token might be needed depending on global Flask-WTF setup, but admin.py doesn't seem to validate it here #}
+            {# {{ form.hidden_tag() }} #}
+
+            <div class="mb-4">
+                <label for="user_display" class="block text-gray-400 text-sm font-bold mb-2">Usuario:</label>
+                <input type="text" id="user_display" value="{{ record.user.username if record else '' }}" disabled 
+                       class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500 opacity-75 cursor-not-allowed">
+            </div>
+
+            <div class="mb-4">
+                <label for="date" class="block text-gray-400 text-sm font-bold mb-2">Fecha:</label>
+                <input type="date" id="date" name="date" 
+                       value="{{ record.date.strftime('%Y-%m-%d') if record and record.date else '' }}" 
+                       required
+                       class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
+                {# Simple error display if needed, though backend handles flashes #}
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label for="check_in" class="block text-gray-400 text-sm font-bold mb-2">Hora Entrada:</label>
+                    <input type="time" id="check_in" name="check_in" 
+                           value="{{ record.check_in.strftime('%H:%M:%S') if record and record.check_in else '' }}" 
+                           step="1"
+                           class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
+                </div>
+                <div>
+                    <label for="check_out" class="block text-gray-400 text-sm font-bold mb-2">Hora Salida:</label>
+                    <input type="time" id="check_out" name="check_out" 
+                           value="{{ record.check_out.strftime('%H:%M:%S') if record and record.check_out else '' }}" 
+                           step="1"
+                           class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label for="notes" class="block text-gray-400 text-sm font-bold mb-2">Notas:</label>
+                <textarea id="notes" name="notes" rows="3" 
+                          class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">{{ record.notes if record and record.notes else '' }}</textarea>
+            </div>
+
+            <div class="flex items-center justify-end space-x-4">
+                <a href="{{ url_for('admin.manage_records') }}" class="inline-block align-baseline font-bold text-sm text-gray-400 hover:text-gray-200">
+                    Cancelar
+                </a>
+                <button type="submit" class="bg-fuchsia-800 hover:bg-fuchsia-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline cursor-pointer">
+                    Guardar Cambios
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

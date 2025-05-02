@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exportar Registros a Excel - Admin Panel</title>
+    <!-- Inherit styles or use base template -->
+    <style>
+        body { font-family: sans-serif; margin: 0; background-color: #f4f7f6; }
+        .sidebar { height: 100%; width: 220px; position: fixed; z-index: 1; top: 0; left: 0; background-color: #2c3e50; overflow-x: hidden; padding-top: 20px; }
+        .sidebar a { padding: 10px 15px; text-decoration: none; font-size: 18px; color: #bdc3c7; display: block; }
+        .sidebar a:hover { color: #ecf0f1; background-color: #34495e; }
+        .sidebar h3 { color: #ecf0f1; text-align: center; margin-bottom: 20px; }
+        .main-content { margin-left: 230px; padding: 20px; }
+        .header { background-color: #fff; padding: 10px 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .header h2 { margin: 0; color: #333; }
+        .header a { text-decoration: none; color: #e74c3c; }
+        .content-area { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.05); }
+        .content-area h3 { margin-top: 0; color: #34495e; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; color: #555; font-weight: bold; }
+        input[type="date"], select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button[type="submit"] { background-color: #16a085; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button[type="submit"]:hover { background-color: #1abc9c; }
+        .flash-message { padding: 10px; margin-bottom: 15px; border-radius: 4px; }
+        .flash-danger { background-color: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
+        .flash-warning { background-color: #fcf8e3; color: #8a6d3b; border: 1px solid #faebcc; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h3>Admin Panel</h3>
+        <a href="{{ url_for("admin.dashboard") }}">Dashboard</a>
+        <a href="{{ url_for("admin.manage_users") }}">Gestionar Usuarios</a>
+        <a href="{{ url_for("admin.manage_records") }}">Gestionar Registros</a>
+        <a href="{{ url_for("export.export_excel") }}" style="color: #ecf0f1; background-color: #34495e;">Exportar Excel</a>
+    </div>
+
+    <div class="main-content">
+        <div class="header">
+            <h2>Exportar Registros a Excel</h2>
+            <a href="{{ url_for("auth.logout") }}">Cerrar Sesión</a>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="content-area">
+            <form method="POST" action="{{ url_for("export.export_excel") }}">
+                <div class="form-group">
+                    <label for="start_date">Fecha de Inicio (Opcional, por defecto inicio de mes):</label>
+                    <input type="date" id="start_date" name="start_date">
+                </div>
+                <div class="form-group">
+                    <label for="end_date">Fecha de Fin (Opcional, por defecto hoy):</label>
+                    <input type="date" id="end_date" name="end_date">
+                </div>
+                <div class="form-group">
+                    <label for="user_id">Usuario (Opcional, por defecto todos):</label>
+                    <select id="user_id" name="user_id">
+                        <option value="all">Todos los Usuarios</option>
+                        {% for user in users %}
+                        <option value="{{ user.id }}">{{ user.username }} ({{ user.full_name }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit">Generar y Descargar Excel</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

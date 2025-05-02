@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}Historial de Fichajes - Miss Sushi{% endblock %}
+
+{% block header %}<span class="text-miss-sushi-pink">Historial Completo de Fichajes</span>{% endblock %}
+
+{% block content %}
+<div class="overflow-x-auto bg-gray-900 border border-gray-700 rounded-lg shadow-md">
+    <table class="min-w-full divide-y divide-gray-700">
+        <thead>
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Fecha</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Entrada</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Salida</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Tiempo Trabajado</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Notas</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Modificado Por</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Última Actualización</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-700">
+            {% for item in records %}
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap text-white">{{ item.record.date.strftime("%Y-%m-%d") }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-white">{{ item.record.check_in.strftime("%H:%M:%S") if item.record.check_in else "-" }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-white">{{ item.record.check_out.strftime("%H:%M:%S") if item.record.check_out else "-" }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-white">{{ item.duration_formatted }}</td>
+                <td class="px-6 py-4 text-white">{{ item.record.notes if item.record.notes else "" }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-white">{{ item.record.modified_by if item.record.modified_by else "-" }}</td> {# Needs logic to show admin username #}
+                <td class="px-6 py-4 whitespace-nowrap text-white">{{ item.record.updated_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" class="px-6 py-4 text-center text-gray-500">No hay registros en el historial.</td> {# Updated colspan to 7 #}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{# Optional: Add pagination links here if needed, styled appropriately #}
+
+<div class="mt-6 text-center">
+     <a href="{{ url_for('time.dashboard') }}" class="text-miss-sushi-pink hover:underline">Volver al Panel</a>
+</div>
+{% endblock %}
+

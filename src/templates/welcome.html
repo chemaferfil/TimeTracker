@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bienvenido - Miss Sushi Time Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+          theme: {
+            extend: {
+              colors: {
+                'miss-sushi-pink': '#E85D8A',
+                'miss-sushi-grey': '#4A4A4A',
+              }
+            }
+          }
+        }
+    </script>
+</head>
+<body class="bg-black text-white font-sans flex justify-center items-center min-h-screen m-0">
+    <div class="text-center p-10">
+        <!-- Logo de la empresa -->
+        <img
+          src="{{ url_for('static', filename='logo.png') }}"
+          alt="Miss Sushi Logo"
+          class="mx-auto mb-8 w-48"
+        />
+        <!-- Título -->
+        <h1 class="text-miss-sushi-pink mb-12 text-3xl font-semibold">
+          Time Tracker
+        </h1>
+        <!-- Botones -->
+        <div class="flex flex-col gap-6 items-center">
+            <a
+              href="{{ url_for('auth.login') }}"
+              class="inline-block text-center py-4 px-10 rounded-full text-lg font-bold transition-opacity duration-300 ease-in-out bg-miss-sushi-pink text-white hover:opacity-90 w-64 no-underline"
+            >
+              Iniciar Sesión
+            </a>
+            <a
+              href="{{ url_for('auth.register') }}"
+              class="inline-block text-center py-4 px-10 rounded-full text-lg font-bold transition-opacity duration-300 ease-in-out bg-miss-sushi-grey text-white hover:opacity-90 w-64 no-underline"
+            >
+              Registrarse
+            </a>
+        </div>
+    </div>
+</body>
+</html>
