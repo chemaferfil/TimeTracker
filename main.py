@@ -20,7 +20,10 @@ app = Flask(
 
 # Configuración
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
+    'DATABASE_URL',
+    'sqlite:///time_tracker.db'
+)
 
 # Inicializar SQLAlchemy
 db.init_app(app)
