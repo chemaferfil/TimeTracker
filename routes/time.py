@@ -1,8 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from sqlalchemy import desc
 from datetime import datetime, date, timedelta
-from src.models.models import User, TimeRecord
-from src.models.database import db
+from models.models import User, TimeRecord
+from models.database import db
 
 time_bp = Blueprint("time", __name__, template_folder="../templates")
 

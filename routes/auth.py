@@ -1,8 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from werkzeug.security import check_password_hash, generate_password_hash
-from src.models.models import User, TimeRecord
-from src.models.database import db
-from datetime import date, datetime, timedelta # Import timedelta
+from models.models import User, TimeRecord
+from models.database import db
+from datetime import date, datetime, timedelta  # Import timedelta
 from sqlalchemy import desc # Import desc for ordering
 
 auth_bp = Blueprint("auth", __name__, template_folder="../templates")

@@ -2,8 +2,8 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from functools import wraps
-from src.models.models import User, TimeRecord
-from src.models.database import db
+from models.models import User, TimeRecord
+from models.database import db
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
 

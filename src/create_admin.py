@@ -4,8 +4,8 @@ import os
 # Añadir la carpeta raíz del proyecto al path para permitir imports relativos
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.models.models import User
-from src.models.database import db
+from models.models import User
+from models.database import db
 from flask import Flask
 
 app = Flask(__name__)
