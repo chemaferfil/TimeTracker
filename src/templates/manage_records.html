@@ -6,16 +6,11 @@
 <div class="container mx-auto px-4 py-8">
     <div class="flex justify-between items-center mb-6">
         <h2 class="text-3xl font-bold text-gray-200">Gestionar Registros de Fichaje</h2>
-        {# Add filters if needed later #}
-        {# <div class="filters">
-            <p class="text-gray-400">Filtros (a implementar): Por Usuario, Por Fecha</p>
-        </div> #}
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
-                {# Adjust flash message styling for dark theme #}
                 <div class="p-4 mb-4 text-sm rounded-lg 
                     {% if category == 'success' %} bg-green-900 text-green-300
                     {% elif category == 'danger' %} bg-red-900 text-red-300
@@ -42,28 +37,45 @@
                     <th class="px-5 py-3 border-b-2 border-gray-700">Acciones</th>
                 </tr>
             </thead>
-            <tbody class="text-gray-200">                {% for item in records %}
+            <tbody class="text-gray-200">
+                {% for item in records %}
                 <tr class="border-b border-gray-700 hover:bg-gray-800">
                     <td class="px-5 py-4 whitespace-nowrap">{{ item.record.user.username }}</td>
                     <td class="px-5 py-4 whitespace-nowrap">{{ item.record.date.strftime("%d-%m-%Y") }}</td>
-                    <td class="px-5 py-4 whitespace-nowrap">{{ item.record.check_in.strftime("%H:%M:%S") if item.record.check_in else "-" }}</td>
-                    <td class="px-5 py-4 whitespace-nowrap">{{ item.record.check_out.strftime("%H:%M:%S") if item.record.check_out else "-" }}</td>
+                    <td class="px-5 py-4 whitespace-nowrap">
+                        {{ item.record.check_in.strftime("%H:%M:%S") if item.record.check_in else "-" }}
+                    </td>
+                    <td class="px-5 py-4 whitespace-nowrap">
+                        {{ item.record.check_out.strftime("%H:%M:%S") if item.record.check_out else "-" }}
+                    </td>
                     <td class="px-5 py-4 whitespace-nowrap">{{ item.duration_formatted }}</td>
                     <td class="px-5 py-4">{{ item.record.notes if item.record.notes else "" }}</td>
-                    <td class="px-5 py-4 whitespace-nowrap">{{ item.record.updated_at.strftime("%d-%m-%Y %H:%M:%S") }}</td>
                     <td class="px-5 py-4 whitespace-nowrap">
-                        <a href="{{ url_for('admin.edit_record', record_id=item.record.id) }}" class="inline-block bg-fuchsia-800 hover:bg-fuchsia-700 text-white font-bold py-1 px-3 rounded text-xs">Editar</a>
-                        {# Add delete button/logic if needed later #}
+                        {{ item.record.updated_at.strftime("%d-%m-%Y %H:%M:%S") }}
+                    </td>
+                    <td class="px-5 py-4 whitespace-nowrap space-x-2">
+                        <a href="{{ url_for('admin.edit_record', record_id=item.record.id) }}"
+                           class="inline-block bg-fuchsia-800 hover:bg-fuchsia-700 text-white font-bold py-1 px-3 rounded text-xs">
+                            Editar
+                        </a>
+                        <form action="{{ url_for('admin.delete_record', record_id=item.record.id) }}" method="POST" class="inline-block"
+                              onsubmit="return confirm('¿Estás seguro de que deseas eliminar este registro de fichaje?');">
+                            <button type="submit"
+                                    class="bg-red-800 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-xs transition-colors duration-300 ease-in-out">
+                                Eliminar
+                            </button>
+                        </form>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="8" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">No hay registros para mostrar.</td> {# Updated colspan to 8 #}
+                    <td colspan="8" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">
+                        No hay registros para mostrar.
+                    </td>
                 </tr>
-                {% endfor %}            </tbody>
+                {% endfor %}
+            </tbody>
         </table>
-        {# Add Pagination Here Later #}
     </div>
 </div>
 {% endblock %}
-

@@ -7,11 +7,7 @@
     <h2 class="text-3xl font-bold text-gray-200 mb-6">Editar Registro de Fichaje</h2>
 
     <div class="bg-gray-900 shadow-md rounded-lg p-6">
-        {# Use standard HTML form, ensure method is POST and action points to the correct endpoint (usually empty for self-submission) #}
         <form method="POST" action="">
-            {# CSRF token might be needed depending on global Flask-WTF setup, but admin.py doesn't seem to validate it here #}
-            {# {{ form.hidden_tag() }} #}
-
             <div class="mb-4">
                 <label for="user_display" class="block text-gray-400 text-sm font-bold mb-2">Usuario:</label>
                 <input type="text" id="user_display" value="{{ record.user.username if record else '' }}" disabled 
@@ -24,7 +20,6 @@
                        value="{{ record.date.strftime('%Y-%m-%d') if record and record.date else '' }}" 
                        required
                        class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
-                {# Simple error display if needed, though backend handles flashes #}
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -62,4 +57,3 @@
     </div>
 </div>
 {% endblock %}
-

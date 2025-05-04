@@ -3,7 +3,7 @@ from functools import wraps
 from models.models import User, TimeRecord
 from models.database import db
 from werkzeug.security import generate_password_hash
-from datetime import datetime, timedelta
+from datetime import datetime
 
 admin_bp = Blueprint("admin", __name__, template_folder="../templates", url_prefix="/admin")
 
@@ -28,10 +28,7 @@ def dashboard():
     active_users = (
         db.session
           .query(TimeRecord.user_id)
-          .filter(
-              TimeRecord.check_in.isnot(None),
-              TimeRecord.check_out.is_(None)
-          )
+          .filter(TimeRecord.check_in.isnot(None), TimeRecord.check_out.is_(None))
           .distinct()
           .count()
     )
@@ -200,18 +197,36 @@ def edit_record(record_id):
             check_out_str = request.form.get("check_out")
             date_str = request.form.get("date")
             notes = request.form.get("notes")
+
             record.date = datetime.strptime(date_str, "%Y-%m-%d").date()
             record.check_in = datetime.strptime(f"{date_str} {check_in_str}", "%Y-%m-%d %H:%M:%S") if check_in_str else None
             record.check_out = datetime.strptime(f"{date_str} {check_out_str}", "%Y-%m-%d %H:%M:%S") if check_out_str else None
             record.notes = notes
             record.modified_by = session.get("user_id")
+
             if record.check_in and record.check_out and record.check_out < record.check_in:
                 flash("La hora de salida no puede ser anterior a la hora de entrada.", "danger")
                 return render_template("record_form.html", record=record, form_data=request.form)
+
             db.session.commit()
             flash(f"Registro del {record.date.strftime('%Y-%m-%d')} para {record.user.username} actualizado.", "success")
             return redirect(url_for("admin.manage_records"))
+
         except ValueError:
             flash("Formato de fecha/hora inválido. Use YYYY-MM-DD y HH:MM:SS.", "danger")
-            return render_template("record_form.html", record=record)
-                                   
+            return render_template("record_form.html", record=record, form_data=request.form)
+
+        except Exception as e:
+            flash(f"Ocurrió un error inesperado: {str(e)}", "danger")
+            return render_template("record_form.html", record=record, form_data=request.form)
+
+    return render_template("record_form.html", record=record)
+
+@admin_bp.route("/records/delete/<int:record_id>", methods=["POST"])
+@admin_required
+def delete_record(record_id):
+    record = TimeRecord.query.get_or_404(record_id)
+    db.session.delete(record)
+    db.session.commit()
+    flash("Registro de fichaje eliminado correctamente.", "success")
+    return redirect(url_for("admin.manage_records"))
