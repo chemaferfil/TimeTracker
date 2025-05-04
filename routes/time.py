@@ -24,7 +24,6 @@ def check_in():
     user_id = session["user_id"]
 
     try:
-        # Bloqueo para evitar condiciones de carrera concurrentes
         db.session.execute(text("LOCK TABLE public.time_record IN SHARE ROW EXCLUSIVE MODE"))
 
         existing_open = (
@@ -49,7 +48,6 @@ def check_in():
             db.session.commit()
             flash("Entrada registrada correctamente.", "success")
 
-            # Emitir evento en tiempo real
             try:
                 socketio = current_app.extensions['socketio']
                 socketio.emit(
@@ -66,7 +64,7 @@ def check_in():
         db.session.rollback()
         flash("Error al registrar la entrada. Intenta de nuevo.", "danger")
 
-    return redirect(url_for("time.dashboard"))
+    return redirect(url_for("auth.dashboard"))
 
 @time_bp.route("/check_out", methods=["POST"])
 def check_out():
@@ -90,7 +88,6 @@ def check_out():
             db.session.commit()
             flash("Salida registrada correctamente.", "success")
 
-            # Emitir evento en tiempo real
             try:
                 socketio = current_app.extensions['socketio']
                 socketio.emit(
@@ -109,44 +106,11 @@ def check_out():
         db.session.rollback()
         flash("Error al registrar la salida. Intenta de nuevo.", "danger")
 
-    return redirect(url_for("time.dashboard"))
+    return redirect(url_for("auth.dashboard"))
 
 @time_bp.route("/dashboard")
 def dashboard():
-    if "user_id" not in session:
-        return redirect(url_for("auth.login"))
-    user_id = session["user_id"]
-    user = User.query.get(user_id)
-
-    # Registro abierto actual
-    current_open = (
-        TimeRecord.query
-            .filter_by(user_id=user_id, check_out=None)
-            .order_by(desc(TimeRecord.id))
-            .first()
-    )
-
-    # Historial reciente (7 registros)
-    recent_records = (
-        TimeRecord.query
-            .filter_by(user_id=user_id)
-            .order_by(desc(TimeRecord.id))
-            .limit(7)
-            .all()
-    )
-
-    return render_template(
-        "dashboard.html",
-        user=user,
-        current_open_record=current_open,
-        recent_records=[
-            {
-                'record': r,
-                'duration_formatted': format_timedelta(r.check_out - r.check_in) if r.check_in and r.check_out else "-"
-            }
-            for r in recent_records
-        ]
-    )
+    return redirect(url_for("auth.dashboard"))
 
 @time_bp.route("/history")
 def history():
