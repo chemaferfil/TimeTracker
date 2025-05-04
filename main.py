@@ -9,8 +9,8 @@ from routes.export import export_bp
 
 app = Flask(
     __name__,
-    static_folder='static',
-    template_folder='templates'
+    static_folder='src/static',
+    template_folder='src/templates'
 )
 
 # Configuración
