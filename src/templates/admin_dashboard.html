@@ -8,50 +8,39 @@
   <h2 class="font-semibold text-lg mb-4 text-gray-200">Resumen Rápido</h2>
   <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
     <div class="bg-fuchsia-800 rounded p-4 flex flex-col items-center shadow">
-      <span class="text-3xl font-bold text-white">{{ user_count }}</span>
+      <span class="text-3xl font-bold text-white" id="user-count">{{ user_count }}</span>
       <span class="text-xs uppercase tracking-wide text-gray-200 mt-1">Usuarios<br/>registrados</span>
     </div>
     <div class="bg-fuchsia-800 rounded p-4 flex flex-col items-center shadow">
-      <span class="text-3xl font-bold text-white">{{ active_user_count }}</span>
+      <span class="text-3xl font-bold text-white" id="active-user-count">{{ active_user_count }}</span>
       <span class="text-xs uppercase tracking-wide text-gray-200 mt-1">Usuarios<br/>activos</span>
     </div>
-    <!-- puedes añadir más métricas -->
+    <!-- Otros indicadores... -->
   </div>
 </section>
 
-<!-- Últimos registros -->
-<section class="bg-gray-900 shadow-md rounded-lg p-6 overflow-hidden">
-  <h2 class="font-semibold text-lg mb-4 text-gray-200">Últimos Registros de Fichaje</h2>
-
-  <div class="overflow-x-auto">
+<!-- Tabla de registros recientes -->
+<section class="bg-gray-800 shadow-md rounded-lg p-6 mb-8">
+  <h2 class="font-semibold text-lg mb-4 text-gray-200">Registros Recientes</h2>
+  <div class="overflow-auto rounded-lg">
     <table class="min-w-full leading-normal">
-      <thead class="bg-gray-800 text-left text-gray-400 uppercase text-sm">
+      <thead>
         <tr>
-          <th class="px-5 py-3 border-b-2 border-gray-700">Usuario</th>
-          <th class="px-5 py-3 border-b-2 border-gray-700">Fecha</th>
-          <th class="px-5 py-3 border-b-2 border-gray-700">Entrada</th>
-          <th class="px-5 py-3 border-b-2 border-gray-700">Salida</th>
-          <th class="px-5 py-3 border-b-2 border-gray-700">Tiempo Trabajado</th>
-          <th class="px-5 py-3 border-b-2 border-gray-700">Notas</th>
+          <!-- Encabezados... -->
         </tr>
       </thead>
-      <tbody class="text-gray-200">
+      <tbody>
         {% for item in recent_records %}
-          <tr class="border-b border-gray-700 hover:bg-gray-800">
-            <td class="px-5 py-4 whitespace-nowrap">{{ item.record.user.username }}</td>
-            <td class="px-5 py-4 whitespace-nowrap">{{ item.record.date.strftime('%Y-%m-%d') }}</td>
-            <td class="px-5 py-4 whitespace-nowrap">
-              {{ item.record.check_in.strftime('%H:%M:%S') if item.record.check_in else '-' }}
-            </td>
-            <td class="px-5 py-4 whitespace-nowrap">
-              {{ item.record.check_out.strftime('%H:%M:%S') if item.record.check_out else '-' }}
-            </td>
-            <td class="px-5 py-4 whitespace-nowrap">{{ item.duration_formatted }}</td>
-            <td class="px-5 py-4">{{ item.record.notes or "" }}</td>
+          <tr>
+            <td class="px-5 py-5 border-b border-gray-700">{{ item.record.user.username }}</td>
+            <td class="px-5 py-5 border-b border-gray-700">{{ item.record.check_in.strftime('%d-%m-%Y %H:%M:%S') }}</td>
+            <td class="px-5 py-5 border-b border-gray-700">{{ item.record.check_out and item.record.check_out.strftime('%d-%m-%Y %H:%M:%S') or '-' }}</td>
+            <td class="px-5 py-5 border-b border-gray-700">{{ item.duration_formatted }}</td>
+            <td class="px-5 py-5 border-b border-gray-700">{{ item.record.notes or '' }}</td>
           </tr>
         {% else %}
           <tr>
-            <td colspan="6" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">
+            <td colspan="5" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">
               No hay registros recientes.
             </td>
           </tr>
@@ -60,4 +49,22 @@
     </table>
   </div>
 </section>
+
+{% endblock %}
+
+{% block scripts %}
+  <!-- Socket.IO client -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    // Actualiza conteo de usuarios activos
+    socket.on('user_checked_in', data => {
+      const el = document.getElementById('active-user-count');
+      if (el) el.textContent = parseInt(el.textContent) + 1;
+    });
+    socket.on('user_checked_out', data => {
+      const el = document.getElementById('active-user-count');
+      if (el) el.textContent = Math.max(parseInt(el.textContent) - 1, 0);
+    });
+  </script>
 {% endblock %}
