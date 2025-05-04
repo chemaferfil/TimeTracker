@@ -1,5 +1,3 @@
-# src/routes/admin.py
-
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from functools import wraps
 from models.models import User, TimeRecord
@@ -9,7 +7,6 @@ from datetime import datetime, timedelta
 
 admin_bp = Blueprint("admin", __name__, template_folder="../templates", url_prefix="/admin")
 
-# Decorator to check if user is admin
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -30,7 +27,7 @@ def dashboard():
     # 1️⃣ Usuarios registrados (sin contar administradores)
     total_users = User.query.filter_by(is_admin=False).count()
 
-    # 2️⃣ Usuarios activos: tienen check_in NO nulo y check_out aún nulo
+    
     active_users = (
         db.session
           .query(TimeRecord.user_id)
@@ -42,7 +39,7 @@ def dashboard():
           .count()
     )
 
-    # Fetch recent records con usuario, ordenadas desc, límite 10
+    
     recent_records = (
         TimeRecord.query
         .join(User, TimeRecord.user_id == User.id)
@@ -51,7 +48,7 @@ def dashboard():
         .all()
     )
 
-    # Helper to formatear timedelta
+    
     def format_timedelta(td):
         if td is None:
             return "-"
@@ -60,7 +57,7 @@ def dashboard():
         minutes, seconds = divmod(remainder, 60)
         return f"{hours:02}:{minutes:02}:{seconds:02}"
 
-    # Calcular duración para cada registro reciente
+   
     recent_records_with_duration = []
     for record in recent_records:
         duration = None
@@ -135,7 +132,7 @@ def edit_user(user_id):
         new_username = request.form.get("username").strip()
         new_email    = request.form.get("email").strip()
 
-        # Validar username sin colisionar con otros (excluyendo al propio usuario)
+       
         if new_username != user.username:
             exists = User.query.filter(User.username == new_username, User.id != user.id).first()
             if exists:
@@ -143,7 +140,7 @@ def edit_user(user_id):
                 return render_template("user_form.html", user=user, action="edit", form_data=request.form)
             user.username = new_username
 
-        # Validar email sin colisionar con otros (excluyendo al propio usuario)
+       
         if new_email != user.email:
             exists = User.query.filter(User.email == new_email, User.id != user.id).first()
             if exists:
@@ -151,13 +148,13 @@ def edit_user(user_id):
                 return render_template("user_form.html", user=user, action="edit", form_data=request.form)
             user.email = new_email
 
-        # Resto de campos
+        
         user.full_name = request.form.get("full_name")
         if user.id != session.get("user_id"):
             user.is_admin  = (request.form.get("is_admin") == "on")
             user.is_active = (request.form.get("is_active") == "on")
 
-        # Si pusieron nueva contraseña
+        
         new_password = request.form.get("password")
         if new_password:
             user.set_password(new_password)
@@ -182,7 +179,7 @@ def toggle_user_active(user_id):
     flash(f"Usuario {user.username} ha sido {status}.", "info")
     return redirect(url_for("admin.manage_users"))
 
-# --- Time Record Management ---
+
 @admin_bp.route("/records")
 @admin_required
 def manage_records():
