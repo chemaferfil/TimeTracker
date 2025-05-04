@@ -55,9 +55,7 @@ def check_in():
                     {
                         'user_id': user_id,
                         'check_in': new_record.check_in.isoformat()
-                    },
-                    broadcast=True
-                )
+                    })
             except Exception as e:
                 current_app.logger.error(f"Error al emitir user_checked_in: {e}")
     except SQLAlchemyError:
@@ -95,9 +93,7 @@ def check_out():
                     {
                         'user_id': user_id,
                         'check_out': open_record.check_out.isoformat()
-                    },
-                    broadcast=True
-                )
+                    })
             except Exception as e:
                 current_app.logger.error(f"Error al emitir user_checked_out: {e}")
         else:
