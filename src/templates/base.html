@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}Fichaje Laboral{% endblock %}</title>
 
-    <!-- Tailwind CSS CDN (para desarrollo) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -35,8 +34,6 @@
     </script>
 
     {% block extra_head %}{% endblock %}
-
-    <!-- Estilo básico para sidebar-link (sin usar @apply) -->
     <style>
       .sidebar-link {
         display: block;
@@ -52,12 +49,9 @@
     <div class="flex min-h-screen">
 
       {% if session.get('is_admin') %}
-      <!-- Sidebar (oculto en móvil) -->
       <aside class="hidden md:flex md:flex-col w-56 bg-gray-900 dark:bg-gray-900 text-sushi-100 flex-shrink-0">
-        <div class="px-6 py-5 font-brand text-xl text-center border-b border-gray-700">
-          
-        </div>
-        <nav role="navigation" class="mt-4 flex flex-col gap-1 px-2">
+        <div class="px-6 py-5 font-brand text-xl text-center border-b border-gray-700"></div>
+        <nav class="mt-4 flex flex-col gap-1 px-2">
           {% set links = [
             {'endpoint': 'admin.dashboard',    'label': 'Dashboard'},
             {'endpoint': 'admin.manage_users', 'label': 'Gestionar Usuarios'},
@@ -76,51 +70,38 @@
       </aside>
       {% endif %}
 
-      <!-- Contenido principal -->
       <div class="flex-1 flex flex-col">
-
-        <!-- Barra superior -->
-        <header class="flex items-center justify-between bg-white dark:bg-gray-900 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <div class="flex items-center">
-            {% if session.get('is_admin') %}
-            <!-- Toggle sidebar en móvil -->
-            <button id="btn-sidebar-toggle" class="md:hidden mr-3 p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            {% endif %}
-            <h1 class="text-2xl font-semibold font-brand text-gray-700 dark:text-gray-200">
+        <!-- Barra superior responsive -->
+        <header class="bg-white dark:bg-gray-900 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+            <h1 class="text-2xl font-semibold font-brand text-gray-700 dark:text-gray-200 text-center sm:text-left">
               {% block header %}{% endblock %}
             </h1>
-          </div>
-          <div class="flex items-center space-x-4">
-            <!-- Dark mode toggle -->
-            <button id="btn-theme-toggle" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700" aria-label="Toggle dark mode">
-              <svg id="icon-light" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m8.66-8.66h-1M4.34 12.34h-1m15.36 5.3l-.7-.7M6.34 6.34l-.7-.7m15.36 0l-.7.7M6.34 17.66l-.7.7" />
-              </svg>
-              <svg id="icon-dark" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3C8.134 3 5 6.134 5 10c0 3.866 3.134 7 7 7s7-3.134 7-7c0-3.866-3.134-7-7-7z" />
-              </svg>
-            </button>
-
-            <a href="{{ url_for('auth.logout') }}" class="text-sushi-600 hover:text-sushi-500 font-medium">
-              Cerrar Sesión
-            </a>
+            <div class="flex items-center justify-center sm:justify-end gap-4">
+              <button id="btn-theme-toggle" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700" aria-label="Toggle dark mode">
+                <svg id="icon-light" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m8.66-8.66h-1M4.34 12.34h-1m15.36 5.3l-.7-.7M6.34 6.34l-.7-.7m15.36 0l-.7.7M6.34 17.66l-.7.7" />
+                </svg>
+                <svg id="icon-dark" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3C8.134 3 5 6.134 5 10c0 3.866 3.134 7 7 7s7-3.134 7-7c0-3.866-3.134-7-7-7z" />
+                </svg>
+              </button>
+              <a href="{{ url_for('auth.logout') }}" class="text-sushi-600 hover:text-sushi-500 font-medium text-sm">
+                Cerrar Sesión
+              </a>
+            </div>
           </div>
         </header>
 
-        <!-- Mensajes flash -->
         <div class="p-4">
           {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
               <div class="space-y-2">
                 {% for category, message in messages %}
                   <div class="px-4 py-2 rounded text-sm
-                              {% if category=='success' %} bg-green-100 text-green-800
-                              {% elif category=='danger'  %} bg-red-100 text-red-800
-                              {% else %} bg-sushi-100 text-sushi-800 {% endif %}">
+                    {% if category=='success' %} bg-green-100 text-green-800
+                    {% elif category=='danger' %} bg-red-100 text-red-800
+                    {% else %} bg-sushi-100 text-sushi-800 {% endif %}">
                     {{ message }}
                   </div>
                 {% endfor %}
@@ -129,16 +110,13 @@
           {% endwith %}
         </div>
 
-        <!-- Contenido específico de cada página -->
         <main class="flex-1 p-6 overflow-auto">
           {% block content %}{% endblock %}
         </main>
       </div>
     </div>
 
-    <!-- Scripts de interactividad -->
     <script>
-      // Toggle dark mode
       const btnTheme = document.getElementById('btn-theme-toggle');
       const htmlEl = document.documentElement;
       btnTheme.addEventListener('click', () => {
@@ -147,7 +125,6 @@
         document.getElementById('icon-dark').classList.toggle('hidden');
       });
 
-      // Toggle sidebar en móvil (solo si existe)
       const btnSidebar = document.getElementById('btn-sidebar-toggle');
       if (btnSidebar) {
         const aside = document.querySelector('aside');

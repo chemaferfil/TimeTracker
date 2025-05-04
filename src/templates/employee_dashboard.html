@@ -1,95 +1,100 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Empleado - Miss Sushi Time Tracker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-          theme: {
-            extend: {
-              colors: {
-                'miss-sushi-pink': '#E85D8A',
-                'miss-sushi-grey': '#4A4A4A',
-              }
-            }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel de Empleado - Miss Sushi Time Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'miss-sushi-pink': '#E85D8A',
+            'miss-sushi-grey': '#4A4A4A',
           }
         }
-      </script>
+      }
+    }
+  </script>
 </head>
-<body class="bg-black text-white font-sans min-h-screen m-0 p-8">
-    <div class="mx-auto">
+<body class="bg-black text-white font-sans min-h-screen m-0 p-6 sm:p-8">
+  <div class="mx-auto max-w-5xl">
 
-        <div class="flex justify-between items-center mb-8">
-            <div class="flex items-center space-x-4">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="Miss Sushi Logo" class="h-10 w-auto"> {# Adjust height (h-10) as needed #}
-                <h1 class="text-miss-sushi-pink text-3xl font-semibold">Bienvenido, {{ user.full_name }}</h1>
-            </div>
-            <a href="{{ url_for('auth.logout') }}" class="text-miss-sushi-pink hover:underline">Cerrar Sesión</a>
-        </div>
-
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div class="mb-6 space-y-2">
-                {% for category, message in messages %}
-                    <div class="p-3 rounded-md text-sm 
-                        {% if category == 'danger' %} bg-red-500 border border-red-700 text-white 
-                        {% elif category == 'success' %} bg-green-500 border border-green-700 text-white
-                        {% else %} bg-blue-500 border border-blue-700 text-white {% endif %}
-                        ">{{ message }}</div>
-                {% endfor %}
-                </div>
-            {% endif %}
-        {% endwith %}
-
-        <div class="mb-8 p-6 border border-gray-700 rounded-lg bg-gray-900">
-            <h3 class="text-xl font-medium mb-4 text-miss-sushi-pink">Estado Actual</h3>
-            
-            {% if today_record %}
-                <p class="mb-1 text-yellow-400">¡Tienes una sesión de fichaje abierta!</p>
-                <p class="mb-2"><strong>Entrada:</strong> {{ today_record.check_in.strftime("%d-%m-%Y %H:%M:%S") }}</p>
-                <p><strong>Salida:</strong> Pendiente</p>
-            {% else %}
-                <p class="text-gray-400">No tienes ninguna sesión de fichaje activa.</p>
-            {% endif %}
-            {% include 'check_in_out_form.html' %}
-        </div>
-
-        <h3 class="text-xl font-medium mb-4 text-miss-sushi-pink">Registros recientes</h3>
-        <div class="overflow-x-auto bg-gray-900 border border-gray-700 rounded-lg">
-            <table class="min-w-full divide-y divide-gray-700">
-                <thead>
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Fecha</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Entrada</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Salida</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Tiempo Trabajado</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Notas</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-700">
-                    {% for item in recent_records %}
-                    <tr>
-                        <td class="px-6 py-4 whitespace-nowrap">{{ item.record.date.strftime("%d-%m-%Y") }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">{{ item.record.check_in.strftime("%H:%M:%S") if item.record.check_in else "-" }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">{{ item.record.check_out.strftime("%H:%M:%S") if item.record.check_out else "-" }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">{{ item.duration_formatted }}</td>
-                        <td class="px-6 py-4">{{ item.record.notes if item.record.notes else "" }}</td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="5" class="px-6 py-4 text-center text-gray-500">No hay registros recientes.</td> {# Updated colspan to 5 #}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        
-        <div class="mt-6 text-center">
-             <a href="{{ url_for('time.history') }}" class="text-miss-sushi-pink hover:underline">Ver historial completo</a>
-        </div>
-
+    <!-- Encabezado responsivo -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+      <div class="flex items-center gap-4">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="Miss Sushi Logo" class="h-10 w-auto">
+        <h1 class="text-miss-sushi-pink text-2xl sm:text-3xl font-semibold leading-snug">
+          Bienvenido, {{ user.full_name }}
+        </h1>
+      </div>
+      <a href="{{ url_for('auth.logout') }}" class="text-miss-sushi-pink hover:underline text-sm sm:text-base">
+        Cerrar Sesión
+      </a>
     </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="mb-6 space-y-2">
+          {% for category, message in messages %}
+            <div class="p-3 rounded-md text-sm
+              {% if category == 'danger' %} bg-red-500 border border-red-700 text-white
+              {% elif category == 'success' %} bg-green-500 border border-green-700 text-white
+              {% else %} bg-blue-500 border border-blue-700 text-white {% endif %}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="mb-8 p-6 border border-gray-700 rounded-lg bg-gray-900">
+      <h3 class="text-xl font-medium mb-4 text-miss-sushi-pink">Estado Actual</h3>
+      {% if today_record %}
+        <p class="mb-1 text-yellow-400">¡Tienes una sesión de fichaje abierta!</p>
+        <p class="mb-2"><strong>Entrada:</strong> {{ today_record.check_in.strftime("%d-%m-%Y %H:%M:%S") }}</p>
+        <p><strong>Salida:</strong> Pendiente</p>
+      {% else %}
+        <p class="text-gray-400">No tienes ninguna sesión de fichaje activa.</p>
+      {% endif %}
+      {% include 'check_in_out_form.html' %}
+    </div>
+
+    <h3 class="text-xl font-medium mb-4 text-miss-sushi-pink">Registros recientes</h3>
+    <div class="overflow-x-auto bg-gray-900 border border-gray-700 rounded-lg">
+      <table class="min-w-full divide-y divide-gray-700 text-sm">
+        <thead>
+          <tr>
+            <th class="px-6 py-3 text-left font-semibold text-gray-400 uppercase tracking-wider">Fecha</th>
+            <th class="px-6 py-3 text-left font-semibold text-gray-400 uppercase tracking-wider">Entrada</th>
+            <th class="px-6 py-3 text-left font-semibold text-gray-400 uppercase tracking-wider">Salida</th>
+            <th class="px-6 py-3 text-left font-semibold text-gray-400 uppercase tracking-wider">Tiempo Trabajado</th>
+            <th class="px-6 py-3 text-left font-semibold text-gray-400 uppercase tracking-wider">Notas</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-700">
+          {% for item in recent_records %}
+          <tr>
+            <td class="px-6 py-4 whitespace-nowrap">{{ item.record.date.strftime("%d-%m-%Y") }}</td>
+            <td class="px-6 py-4 whitespace-nowrap">{{ item.record.check_in.strftime("%H:%M:%S") if item.record.check_in else "-" }}</td>
+            <td class="px-6 py-4 whitespace-nowrap">{{ item.record.check_out.strftime("%H:%M:%S") if item.record.check_out else "-" }}</td>
+            <td class="px-6 py-4 whitespace-nowrap">{{ item.duration_formatted }}</td>
+            <td class="px-6 py-4">{{ item.record.notes if item.record.notes else "" }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="px-6 py-4 text-center text-gray-500">No hay registros recientes.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-6 text-center">
+      <a href="{{ url_for('time.history') }}" class="text-miss-sushi-pink hover:underline">Ver historial completo</a>
+    </div>
+
+  </div>
 </body>
 </html>

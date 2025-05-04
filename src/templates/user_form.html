@@ -68,9 +68,9 @@
         </div>
         {% endif %}
 
-        {# Submit Button #}
-        <div class="flex justify-end space-x-3">
-             <a href="{{ url_for('admin.manage_users') }}" 
+        {# Submit + Cancel + Delete #}
+        <div class="flex flex-wrap gap-3 justify-end">
+            <a href="{{ url_for('admin.manage_users') }}" 
                class="py-2 px-4 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors duration-300 ease-in-out">
                 Cancelar
             </a>
@@ -78,8 +78,15 @@
                     class="py-2 px-4 rounded-lg bg-miss-sushi-pink text-white hover:opacity-90 transition-opacity duration-300 ease-in-out shadow-md">
                 {{ 'Crear Usuario' if action == 'add' else 'Guardar Cambios' }}
             </button>
+
+            {% if action == 'edit' and user.id != session.get('user_id') %}
+            <form method="POST" action="{{ url_for('admin.delete_user', user_id=user.id) }}" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer.');">
+                <button type="submit" class="py-2 px-4 rounded-lg bg-red-700 text-white hover:bg-red-800 transition-colors duration-300 ease-in-out shadow-md">
+                    Eliminar Usuario
+                </button>
+            </form>
+            {% endif %}
         </div>
     </form>
 </div>
 {% endblock %}
-
