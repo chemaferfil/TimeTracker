@@ -10,6 +10,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
+    weekly_hours = db.Column(db.Integer, nullable=False, default=40)  # Horas contratadas por semana
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationship with TimeRecord (especificamos qué FK usar)

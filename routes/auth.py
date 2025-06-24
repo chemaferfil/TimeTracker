@@ -84,7 +84,7 @@ def dashboard():
         TimeRecord.query
             .filter_by(user_id=user_id)
             .order_by(desc(TimeRecord.date), desc(TimeRecord.check_in))
-            .limit(5)
+            .limit(3)
             .all()
     )
 

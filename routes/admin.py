@@ -72,30 +72,40 @@ def manage_users():
 @admin_required
 def add_user():
     if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
-        full_name = request.form.get("full_name")
-        email = request.form.get("email")
-        is_admin = request.form.get("is_admin") == "on"
-        if not username or not password or not full_name or not email:
+        username      = request.form.get("username")
+        password      = request.form.get("password")
+        full_name     = request.form.get("full_name")
+        email         = request.form.get("email")
+        is_admin      = request.form.get("is_admin") == "on"
+        weekly_hours  = request.form.get("weekly_hours", type=int)
+
+        if not username or not password or not full_name or not email or weekly_hours is None:
             flash("Todos los campos son obligatorios.", "danger")
             return render_template("user_form.html", user=None, action="add", form_data=request.form)
-        existing_user = User.query.filter((User.username == username) | (User.email == email)).first()
+
+        existing_user = User.query.filter(
+            (User.username == username) | (User.email == email)
+        ).first()
         if existing_user:
             flash("El nombre de usuario o el correo electrónico ya existen.", "danger")
             return render_template("user_form.html", user=None, action="add", form_data=request.form)
+
         new_user = User(
             username=username,
             full_name=full_name,
             email=email,
             is_admin=is_admin,
-            is_active=True
+            is_active=True,
+            weekly_hours=weekly_hours
         )
         new_user.set_password(password)
+
         db.session.add(new_user)
         db.session.commit()
+
         flash(f"Usuario {username} creado exitosamente.", "success")
         return redirect(url_for("admin.manage_users"))
+
     return render_template("user_form.html", user=None, action="add")
 
 @admin_bp.route("/users/edit/<int:user_id>", methods=["GET", "POST"])
@@ -109,30 +119,39 @@ def edit_user(user_id):
         ):
             flash("No puedes modificar tu propio estado de administrador o actividad usando este formulario.", "danger")
             return redirect(url_for("admin.edit_user", user_id=user_id))
+
         new_username = request.form.get("username").strip()
         new_email    = request.form.get("email").strip()
+
         if new_username != user.username:
             exists = User.query.filter(User.username == new_username, User.id != user.id).first()
             if exists:
                 flash("El nuevo nombre de usuario ya existe.", "danger")
                 return render_template("user_form.html", user=user, action="edit", form_data=request.form)
             user.username = new_username
+
         if new_email != user.email:
             exists = User.query.filter(User.email == new_email, User.id != user.id).first()
             if exists:
                 flash("El nuevo correo electrónico ya existe.", "danger")
                 return render_template("user_form.html", user=user, action="edit", form_data=request.form)
             user.email = new_email
-        user.full_name = request.form.get("full_name")
+
+        user.full_name    = request.form.get("full_name")
+        user.weekly_hours = request.form.get("weekly_hours", type=int)
+
         if user.id != session.get("user_id"):
             user.is_admin  = (request.form.get("is_admin") == "on")
             user.is_active = (request.form.get("is_active") == "on")
+
         new_password = request.form.get("password")
         if new_password:
             user.set_password(new_password)
+
         db.session.commit()
         flash(f"Usuario {user.username} actualizado exitosamente.", "success")
         return redirect(url_for("admin.manage_users"))
+
     return render_template("user_form.html", user=user, action="edit")
 
 @admin_bp.route("/users/delete/<int:user_id>", methods=["POST"])
@@ -169,6 +188,7 @@ def manage_records():
         .order_by(TimeRecord.id.desc())
         .all()
     )
+
     def format_timedelta(td):
         if td is None:
             return "-"
@@ -176,6 +196,7 @@ def manage_records():
         hours, remainder = divmod(total_seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         return f"{hours:02}:{minutes:02}:{seconds:02}"
+
     records_with_duration = []
     for record in records:
         duration = None
@@ -185,6 +206,7 @@ def manage_records():
             "record": record,
             "duration_formatted": format_timedelta(duration)
         })
+
     return render_template("manage_records.html", records=records_with_duration)
 
 @admin_bp.route("/records/edit/<int:record_id>", methods=["GET", "POST"])
