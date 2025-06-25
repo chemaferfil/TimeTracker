@@ -9,7 +9,12 @@ from models.database import db
 from flask import Flask
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://root:Fichaje2025!@localhost:3306/fichajes"
+
+# Usar SQLite local (mismo timetracker.db que utiliza main.py)
+basedir = os.path.abspath(os.path.dirname(__file__))
+sqlite_uri = 'sqlite:///' + os.path.join(basedir, '..', 'timetracker.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = sqlite_uri
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = 'temporal_secret'
 

@@ -10,23 +10,22 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
-    weekly_hours = db.Column(db.Integer, nullable=False, default=40)  # Horas contratadas por semana
+    weekly_hours = db.Column(db.Integer, nullable=False, default=0) 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Relationship with TimeRecord (especificamos qué FK usar)
+
     time_records = db.relationship(
         'TimeRecord',
         backref='user',
         lazy=True,
         foreign_keys='TimeRecord.user_id'
     )
-    
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
-        
+
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
-    
+
     def __repr__(self):
         return f'<User {self.username}>'
 
@@ -40,6 +39,6 @@ class TimeRecord(db.Model):
     modified_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     def __repr__(self):
         return f'<TimeRecord {self.id} - User {self.user_id}>'

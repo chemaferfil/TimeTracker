@@ -1,43 +1,35 @@
-<!-- Check if user is currently checked in (today_record exists and check_out is null) -->
-{% set is_checked_in = today_record and today_record.check_out is none %}
-
-<form method="POST" action="{{ url_for('time.check_out') if is_checked_in else url_for('time.check_in') }}" class="space-y-4">
-    <div class="flex flex-col sm:flex-row items-start sm:items-end gap-4">
-        <!-- Check In Button (Visible only if NOT checked in) -->
-        <div class="flex-1 w-full sm:w-auto">
-            {% if not is_checked_in %}
-            <button type="submit" name="action" value="check_in"
-                    class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out flex items-center justify-center space-x-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                </svg>
-                <span>Fichar Entrada</span>
-            </button>
-            {% else %}
-            <!-- Placeholder to maintain layout -->
-            <div class="w-full h-12"></div> {# Adjust height to match button #}
-            {% endif %}
-        </div>
-
-        <!-- Check Out Section (Visible only if checked in) -->
-        <div class="flex-1 w-full sm:w-auto">
-            {% if is_checked_in %}
-            <div class="space-y-2">
-                <label for="notes" class="block text-sm font-medium text-gray-400">Notas (opcional):</label>
-                <textarea id="notes" name="notes" rows="2"
-                          class="w-full p-2 rounded bg-gray-800 border border-gray-600 text-white focus:ring-miss-sushi-pink focus:border-miss-sushi-pink shadow-sm"></textarea>
-                <button type="submit" name="action" value="check_out"
-                        class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out flex items-center justify-center space-x-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                    </svg>
-                    <span>Fichar Salida</span>
-                </button>
-            </div>
-            {% else %}
-            <!-- Placeholder to maintain layout -->
-             <div class="w-full h-12"></div> {# Adjust height to match button #}
-            {% endif %}
-        </div>
+{# check_in_out_form.html #}
+{% if today_record %}
+  <!-- Formulario de fichar salida -->
+  <form action="{{ url_for('time.check_out') }}" method="POST" class="mt-6">
+    <div class="mb-4">
+      <label for="notes" class="block text-sm font-medium text-gray-300 mb-1">
+        Notas (opcional)
+      </label>
+      <textarea
+        name="notes"
+        id="notes"
+        rows="3"
+        class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink focus:border-transparent"
+        placeholder="Añade aquí alguna nota sobre tu jornada…"
+      >{{ '' }}</textarea>
     </div>
-</form>
+    <button
+      type="submit"
+      class="w-full inline-flex items-center justify-center gap-2 py-4 px-6 bg-green-600 text-white font-bold rounded-lg hover:bg-green-500 transition-colors duration-300 ease-in-out"
+    >
+      📤 Fichar Salida
+    </button>
+  </form>
+
+{% else %}
+  <!-- Formulario de fichar entrada -->
+  <form action="{{ url_for('time.check_in') }}" method="POST" class="mt-6">
+    <button
+      type="submit"
+      class="w-full inline-flex items-center justify-center gap-2 py-4 px-6 bg-green-600 text-white font-bold rounded-lg hover:bg-green-500 transition-colors duration-300 ease-in-out"
+    >
+      ⏰ Fichar Entrada
+    </button>
+  </form>
+{% endif %}

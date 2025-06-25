@@ -10,57 +10,106 @@
 
 {% block content %}
 <div class="max-w-2xl mx-auto bg-gray-900 border border-gray-700 rounded-lg shadow-md p-8">
-    <form method="POST" action="{{ url_for('admin.add_user') if action == 'add' else url_for('admin.edit_user', user_id=user.id) }}">
-        
-        {# Username #}
+    <form method="POST"
+          action="{{ url_for('admin.add_user') if action == 'add' else url_for('admin.edit_user', user_id=user.id) }}">
+        {% if form_data %}
+        <div class="mb-4 text-red-400 bg-red-900 p-2 rounded">
+            Todos los campos son obligatorios.
+        </div>
+        {% endif %}
+
+        <!-- Nombre de usuario -->
         <div class="mb-4">
-            <label for="username" class="block text-sm font-medium text-gray-300 mb-1">Nombre de usuario</label>
-            <input type="text" id="username" name="username" required 
+            <label for="username" class="block text-sm font-medium text-gray-300 mb-1">
+                Nombre de usuario
+            </label>
+            <input type="text"
+                   id="username"
+                   name="username"
+                   required
                    value="{{ form_data.username if form_data else (user.username if user else '') }}"
-                   class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink focus:border-transparent">
+                   class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink">
         </div>
 
-        {# Full Name #}
+        <!-- Nombre completo -->
         <div class="mb-4">
-            <label for="full_name" class="block text-sm font-medium text-gray-300 mb-1">Nombre Completo</label>
-            <input type="text" id="full_name" name="full_name" required 
+            <label for="full_name" class="block text-sm font-medium text-gray-300 mb-1">
+                Nombre completo
+            </label>
+            <input type="text"
+                   id="full_name"
+                   name="full_name"
+                   required
                    value="{{ form_data.full_name if form_data else (user.full_name if user else '') }}"
-                   class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink focus:border-transparent">
+                   class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink">
         </div>
 
-        {# Email #}
+        <!-- Email -->
         <div class="mb-4">
-            <label for="email" class="block text-sm font-medium text-gray-300 mb-1">Email</label>
-            <input type="email" id="email" name="email" required 
+            <label for="email" class="block text-sm font-medium text-gray-300 mb-1">
+                Email
+            </label>
+            <input type="email"
+                   id="email"
+                   name="email"
+                   required
                    value="{{ form_data.email if form_data else (user.email if user else '') }}"
-                   class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink focus:border-transparent">
+                   class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink">
         </div>
 
-        {# Password (optional for edit) #}
+        <!-- Contraseña -->
         <div class="mb-4">
-            <label for="password" class="block text-sm font-medium text-gray-300 mb-1">Contraseña {{ '(Dejar en blanco para no cambiar)' if action == 'edit' else '' }}</label>
-            <input type="password" id="password" name="password" {{ 'required' if action == 'add' else '' }}
-                   class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink focus:border-transparent">
+            <label for="password" class="block text-sm font-medium text-gray-300 mb-1">
+                Contraseña{% if action=='edit' %} (dejar en blanco para no cambiar){% endif %}
+            </label>
+            <input type="password"
+                   id="password"
+                   name="password"
+                   {% if action=='add' %}required{% endif %}
+                   class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink">
         </div>
 
-        {# Admin Status Checkbox #}
+        <!-- Horas semanales -->
+        <div class="mb-4">
+            <label for="weekly_hours" class="block text-sm font-medium text-gray-300 mb-1">
+                Horas contratadas por semana
+            </label>
+            <input type="number"
+                   id="weekly_hours"
+                   name="weekly_hours"
+                   min="0"
+                   required
+                   value="{{ form_data.weekly_hours if form_data else (user.weekly_hours if user else '') }}"
+                   class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink">
+        </div>
+
+        <!-- Administrador -->
         <div class="mb-6 flex items-center">
-            <input type="checkbox" id="is_admin" name="is_admin" 
-                   {% if form_data %}{% if form_data.get('is_admin') == 'on' %}checked{% endif %}
-                   {% elif user and user.is_admin %}checked{% endif %}
-                   {% if user and user.id == session.get('user_id') %}disabled title="No puedes cambiar tu propio estado de administrador aquí."{% endif %}
+            <input type="checkbox"
+                   id="is_admin"
+                   name="is_admin"
+                   {% if form_data and form_data.get('is_admin')=='on' %}
+                     checked
+                   {% elif user and user.is_admin %}
+                     checked
+                   {% endif %}
                    class="h-4 w-4 text-miss-sushi-pink bg-gray-700 border-gray-600 rounded focus:ring-miss-sushi-pink focus:ring-2">
-            <label for="is_admin" class="ml-2 block text-sm text-gray-300 {{ 'text-gray-500' if user and user.id == session.get('user_id') }}">
+            <label for="is_admin" class="ml-2 block text-sm text-gray-300">
                 Es Administrador
             </label>
         </div>
-        
-        {# Active Status Checkbox (only for edit, not self) #}
-        {% if action == 'edit' and user.id != session.get('user_id') %}
+
+        <!-- Activo (sólo en edición, si no es el propio admin) -->
+        {% if action=='edit' and user.id!=session.get('user_id') %}
         <div class="mb-6 flex items-center">
-            <input type="checkbox" id="is_active" name="is_active" 
-                   {% if form_data %}{% if form_data.get('is_active') == 'on' %}checked{% endif %}
-                   {% elif user and user.is_active %}checked{% endif %}
+            <input type="checkbox"
+                   id="is_active"
+                   name="is_active"
+                   {% if form_data and form_data.get('is_active')=='on' %}
+                     checked
+                   {% elif user and user.is_active %}
+                     checked
+                   {% endif %}
                    class="h-4 w-4 text-miss-sushi-pink bg-gray-700 border-gray-600 rounded focus:ring-miss-sushi-pink focus:ring-2">
             <label for="is_active" class="ml-2 block text-sm text-gray-300">
                 Está Activo
@@ -68,20 +117,22 @@
         </div>
         {% endif %}
 
-        {# Submit + Cancel + Delete #}
+        <!-- Botones -->
         <div class="flex flex-wrap gap-3 justify-end">
-            <a href="{{ url_for('admin.manage_users') }}" 
-               class="py-2 px-4 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors duration-300 ease-in-out">
+            <a href="{{ url_for('admin.manage_users') }}"
+               class="py-2 px-4 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-700">
                 Cancelar
             </a>
-            <button type="submit" 
-                    class="py-2 px-4 rounded-lg bg-miss-sushi-pink text-white hover:opacity-90 transition-opacity duration-300 ease-in-out shadow-md">
-                {{ 'Crear Usuario' if action == 'add' else 'Guardar Cambios' }}
+            <button type="submit"
+                    class="py-2 px-4 rounded-lg bg-miss-sushi-pink text-white hover:opacity-90 shadow-md">
+                {{ 'Crear Usuario' if action=='add' else 'Guardar Cambios' }}
             </button>
-
-            {% if action == 'edit' and user.id != session.get('user_id') %}
-            <form method="POST" action="{{ url_for('admin.delete_user', user_id=user.id) }}" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer.');">
-                <button type="submit" class="py-2 px-4 rounded-lg bg-red-700 text-white hover:bg-red-800 transition-colors duration-300 ease-in-out shadow-md">
+            {% if action=='edit' and user.id!=session.get('user_id') %}
+            <form method="POST"
+                  action="{{ url_for('admin.delete_user', user_id=user.id) }}"
+                  onsubmit="return confirm('¿Estás seguro de eliminar este usuario?');">
+                <button type="submit"
+                        class="py-2 px-4 rounded-lg bg-red-700 text-white hover:bg-red-800 shadow-md">
                     Eliminar Usuario
                 </button>
             </form>

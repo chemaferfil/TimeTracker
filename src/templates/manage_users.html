@@ -21,6 +21,7 @@
                 <th class="px-6 py-3 text-left uppercase">Email</th>
                 <th class="px-6 py-3 text-left uppercase">Admin</th>
                 <th class="px-6 py-3 text-left uppercase">Activo</th>
+                <th class="px-6 py-3 text-left uppercase">Horas/Sem</th>
                 <th class="px-6 py-3 text-left uppercase">Acciones</th>
             </tr>
         </thead>
@@ -32,19 +33,18 @@
                 <td class="px-6 py-4 whitespace-nowrap text-gray-100">{{ user.email }}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-gray-100">{{ 'Sí' if user.is_admin else 'No' }}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-gray-100">{{ 'Sí' if user.is_active else 'No' }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-center text-gray-100">{{ user.weekly_hours }}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                     <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" 
                        class="inline-block py-1 px-3 rounded bg-miss-sushi-grey text-white hover:opacity-90 transition-opacity duration-300 ease-in-out">
                         Editar
                     </a>
-                    
                     <form action="{{ url_for('admin.toggle_user_active', user_id=user.id) }}" method="POST" class="inline-block">
                         <button type="submit" 
                                 class="py-1 px-3 rounded {{ 'bg-red-600 hover:bg-red-700' if user.is_active else 'bg-green-600 hover:bg-green-700' }} text-white transition-colors duration-300 ease-in-out">
                             {{ 'Desactivar' if user.is_active else 'Activar' }}
                         </button>
                     </form>
-                    
                     <form action="{{ url_for('admin.delete_user', user_id=user.id) }}" method="POST" class="inline-block" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este usuario?');">
                         <button type="submit" 
                                 class="py-1 px-3 rounded bg-red-800 hover:bg-red-700 text-white transition-colors duration-300 ease-in-out">
@@ -55,7 +55,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="6" class="px-6 py-4 text-center text-gray-500">No hay usuarios registrados.</td>
+                <td colspan="7" class="px-6 py-4 text-center text-gray-500">No hay usuarios registrados.</td>
             </tr>
             {% endfor %}
         </tbody>

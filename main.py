@@ -24,12 +24,11 @@ app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 if os.getenv('DATABASE_URL'):
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 else:
-    # Usa SQLite local, crea timetracker.db junto a main.py
     basedir = os.path.abspath(os.path.dirname(__file__))
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'timetracker.db')
 # ————————————————————————————————
 
-# desactivar warnings innecesarios
+# Desactivar warnings innecesarios
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Inicializar SQLAlchemy
@@ -52,4 +51,6 @@ def index():
     return render_template("welcome.html")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Obtener el puerto de la variable de entorno o usar 5000 por defecto
+    port = int(os.getenv('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)

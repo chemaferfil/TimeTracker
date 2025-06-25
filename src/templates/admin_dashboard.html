@@ -3,12 +3,10 @@
 {% block header %}<span class="text-miss-sushi-pink">Panel de Administración</span>{% endblock %}
 
 {% block content %}
-<!-- Resumen rápido -->
 <section class="bg-gray-800 shadow-md rounded-lg p-6 mb-8">
   <div class="flex justify-between items-center mb-4">
     <h2 class="font-semibold text-lg text-gray-200">Resumen Rápido</h2>
-    <a href="{{ url_for('admin.dashboard') }}" class="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-fuchsia-700 hover:bg-fuchsia-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-fuchsia-500">
-      <!-- Optional: Add refresh icon here -->
+    <a href="{{ url_for('admin.dashboard') }}" class="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-fuchsia-700 hover:bg-fuchsia-800">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
       </svg>
@@ -24,11 +22,9 @@
       <span class="text-3xl font-bold text-white">{{ active_user_count }}</span>
       <span class="text-xs uppercase tracking-wide text-gray-200 mt-1">Usuarios<br/>activos</span>
     </div>
-    <!-- puedes añadir más métricas -->
   </div>
 </section>
 
-<!-- Últimos registros -->
 <section class="bg-gray-900 shadow-md rounded-lg p-6 overflow-hidden">
   <h2 class="font-semibold text-lg mb-4 text-gray-200">Últimos Registros de Fichaje</h2>
 
@@ -41,14 +37,15 @@
           <th class="px-5 py-3 border-b-2 border-gray-700">Entrada</th>
           <th class="px-5 py-3 border-b-2 border-gray-700">Salida</th>
           <th class="px-5 py-3 border-b-2 border-gray-700">Tiempo Trabajado</th>
+          <th class="px-5 py-3 border-b-2 border-gray-700">Horas Restantes</th>
           <th class="px-5 py-3 border-b-2 border-gray-700">Notas</th>
         </tr>
       </thead>
       <tbody class="text-gray-200">
-        {% for item in recent_records %}
+        {% for item in recent_records|reverse %}
           <tr class="border-b border-gray-700 hover:bg-gray-800">
             <td class="px-5 py-4 whitespace-nowrap">{{ item.record.user.username }}</td>
-            <td class="px-5 py-4 whitespace-nowrap">{{ item.record.date.strftime('%Y-%m-%d') }}</td>
+            <td class="px-5 py-4 whitespace-nowrap">{{ item.record.date.strftime('%d-%m-%Y') }}</td>
             <td class="px-5 py-4 whitespace-nowrap">
               {{ item.record.check_in.strftime('%H:%M:%S') if item.record.check_in else '-' }}
             </td>
@@ -56,11 +53,18 @@
               {{ item.record.check_out.strftime('%H:%M:%S') if item.record.check_out else '-' }}
             </td>
             <td class="px-5 py-4 whitespace-nowrap">{{ item.duration_formatted }}</td>
+            <td class="px-5 py-4 whitespace-nowrap">
+              {% if item.is_over %}
+                <span class="text-red-500">●</span> -{{ item.remaining_formatted }}
+              {% else %}
+                <span class="text-green-500">●</span> {{ item.remaining_formatted }}
+              {% endif %}
+            </td>
             <td class="px-5 py-4">{{ item.record.notes or "" }}</td>
           </tr>
         {% else %}
           <tr>
-            <td colspan="6" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">
+            <td colspan="7" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">
               No hay registros recientes.
             </td>
           </tr>

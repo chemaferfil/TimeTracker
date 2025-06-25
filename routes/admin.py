@@ -3,9 +3,13 @@ from functools import wraps
 from models.models import User, TimeRecord
 from models.database import db
 from werkzeug.security import generate_password_hash
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
-admin_bp = Blueprint("admin", __name__, template_folder="../templates", url_prefix="/admin")
+admin_bp = Blueprint(
+    "admin", __name__,
+    template_folder="../templates",
+    url_prefix="/admin"
+)
 
 def admin_required(f):
     @wraps(f)
@@ -21,40 +25,74 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def format_timedelta(td):
+    if td is None:
+        return "-"
+    total_seconds = int(td.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
+
 @admin_bp.route("/dashboard")
 @admin_required
 def dashboard():
+    # 1. métricas base
     total_users = User.query.filter_by(is_admin=False).count()
     active_users = (
-        db.session
-          .query(TimeRecord.user_id)
-          .filter(TimeRecord.check_in.isnot(None), TimeRecord.check_out.is_(None))
-          .distinct()
-          .count()
+        db.session.query(TimeRecord.user_id)
+        .filter(TimeRecord.check_in.isnot(None), TimeRecord.check_out.is_(None))
+        .distinct()
+        .count()
     )
-    recent_records = (
+
+    # 2. obtengo todos los registros cerrados de esta semana para **cada** empleado
+    today = date.today()
+    start_of_week = today - timedelta(days=today.weekday())
+    end_of_week = start_of_week + timedelta(days=6)
+
+    records = (
         TimeRecord.query
         .join(User, TimeRecord.user_id == User.id)
-        .order_by(TimeRecord.id.desc())
-        .limit(10)
+        .filter(
+            TimeRecord.date >= start_of_week,
+            TimeRecord.date <= end_of_week,
+            TimeRecord.check_out.isnot(None)
+        )
+        .order_by(TimeRecord.date, TimeRecord.check_in)
         .all()
     )
-    def format_timedelta(td):
-        if td is None:
-            return "-"
-        total_seconds = int(td.total_seconds())
-        hours, remainder = divmod(total_seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+    # 3. agrupación por usuario para acumulado semanal
+    #    y enriquecido fila a fila con remaining e is_over
+    #    usamos dict: { user_id: segundos_acumulados }
+    week_acc = {}
     recent_records_with_duration = []
-    for record in recent_records:
-        duration = None
-        if record.check_in and record.check_out:
-            duration = record.check_out - record.check_in
+    for rec in records:
+        uid = rec.user_id
+        # leemos la jornada semanal del empleado
+        weekly_secs = rec.user.weekly_hours * 3600
+
+        # duración de este registro
+        dur = None
+        if rec.check_in and rec.check_out:
+            dur = rec.check_out - rec.check_in
+        secs = dur.total_seconds() if dur else 0
+
+        # acumulamos sólo para este usuario
+        prev = week_acc.get(uid, 0)
+        curr = prev + secs
+        week_acc[uid] = curr
+
+        # calculamos restante (o sobrante)
+        rem = weekly_secs - curr
+        # guardamos
         recent_records_with_duration.append({
-            "record": record,
-            "duration_formatted": format_timedelta(duration)
+            "record": rec,
+            "duration_formatted": format_timedelta(dur),
+            "remaining_formatted": format_timedelta(timedelta(seconds=abs(int(rem)))),
+            "is_over": rem < 0
         })
+
     return render_template(
         "admin_dashboard.html",
         user_count=total_users,
@@ -79,16 +117,21 @@ def add_user():
         is_admin      = request.form.get("is_admin") == "on"
         weekly_hours  = request.form.get("weekly_hours", type=int)
 
-        if not username or not password or not full_name or not email or weekly_hours is None:
+        if not all([username, password, full_name, email]) or weekly_hours is None:
             flash("Todos los campos son obligatorios.", "danger")
-            return render_template("user_form.html", user=None, action="add", form_data=request.form)
+            return render_template(
+                "user_form.html",
+                user=None, action="add",
+                form_data=request.form
+            )
 
-        existing_user = User.query.filter(
-            (User.username == username) | (User.email == email)
-        ).first()
-        if existing_user:
+        if User.query.filter((User.username==username)|(User.email==email)).first():
             flash("El nombre de usuario o el correo electrónico ya existen.", "danger")
-            return render_template("user_form.html", user=None, action="add", form_data=request.form)
+            return render_template(
+                "user_form.html",
+                user=None, action="add",
+                form_data=request.form
+            )
 
         new_user = User(
             username=username,
@@ -99,7 +142,6 @@ def add_user():
             weekly_hours=weekly_hours
         )
         new_user.set_password(password)
-
         db.session.add(new_user)
         db.session.commit()
 
@@ -114,39 +156,38 @@ def edit_user(user_id):
     user = User.query.get_or_404(user_id)
     if request.method == "POST":
         if user.id == session.get("user_id") and (
-            (request.form.get("is_admin") == "on" and not user.is_admin) or 
-            (request.form.get("is_active") == "on" and not user.is_active)
+            (request.form.get("is_admin")=="on" and not user.is_admin) or
+            (request.form.get("is_active")=="on" and not user.is_active)
         ):
-            flash("No puedes modificar tu propio estado de administrador o actividad usando este formulario.", "danger")
+            flash("No puedes modificar tu propio estado de administrador o actividad.", "danger")
             return redirect(url_for("admin.edit_user", user_id=user_id))
 
+        # campos básicos
         new_username = request.form.get("username").strip()
         new_email    = request.form.get("email").strip()
-
         if new_username != user.username:
-            exists = User.query.filter(User.username == new_username, User.id != user.id).first()
-            if exists:
+            if User.query.filter(User.username==new_username, User.id!=user.id).first():
                 flash("El nuevo nombre de usuario ya existe.", "danger")
                 return render_template("user_form.html", user=user, action="edit", form_data=request.form)
             user.username = new_username
 
         if new_email != user.email:
-            exists = User.query.filter(User.email == new_email, User.id != user.id).first()
-            if exists:
+            if User.query.filter(User.email==new_email, User.id!=user.id).first():
                 flash("El nuevo correo electrónico ya existe.", "danger")
                 return render_template("user_form.html", user=user, action="edit", form_data=request.form)
             user.email = new_email
 
+        # full_name y weekly_hours
         user.full_name    = request.form.get("full_name")
         user.weekly_hours = request.form.get("weekly_hours", type=int)
 
         if user.id != session.get("user_id"):
-            user.is_admin  = (request.form.get("is_admin") == "on")
-            user.is_active = (request.form.get("is_active") == "on")
+            user.is_admin  = (request.form.get("is_admin")=="on")
+            user.is_active = (request.form.get("is_active")=="on")
 
-        new_password = request.form.get("password")
-        if new_password:
-            user.set_password(new_password)
+        pw = request.form.get("password")
+        if pw:
+            user.set_password(pw)
 
         db.session.commit()
         flash(f"Usuario {user.username} actualizado exitosamente.", "success")
@@ -182,32 +223,49 @@ def toggle_user_active(user_id):
 @admin_bp.route("/records")
 @admin_required
 def manage_records():
-    records = (
+    # obtenemos todos los registros con salida
+    recs = (
         TimeRecord.query
         .join(User, TimeRecord.user_id == User.id)
-        .order_by(TimeRecord.id.desc())
+        .filter(TimeRecord.check_out.isnot(None))
+        .order_by(TimeRecord.date.desc(), TimeRecord.check_in.desc())
         .all()
     )
 
-    def format_timedelta(td):
-        if td is None:
-            return "-"
-        total_seconds = int(td.total_seconds())
-        hours, remainder = divmod(total_seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return f"{hours:02}:{minutes:02}:{seconds:02}"
+    enriched = []
+    # acumulado por usuario ID
+    week_acc = {}
+    for rec in recs:
+        dur = None
+        if rec.check_in and rec.check_out:
+            dur = rec.check_out - rec.check_in
+        secs = dur.total_seconds() if dur else 0
 
-    records_with_duration = []
-    for record in records:
-        duration = None
-        if record.check_in and record.check_out:
-            duration = record.check_out - record.check_in
-        records_with_duration.append({
-            "record": record,
-            "duration_formatted": format_timedelta(duration)
+        uid = rec.user_id
+        # rango semanal de este registro
+        sow = rec.date - timedelta(days=rec.date.weekday())
+        eow = sow + timedelta(days=6)
+        # sólo sumamos si está dentro de su propia semana actual
+        if sow <= rec.date <= eow:
+            prev = week_acc.get(uid, 0)
+            curr = prev + secs
+            week_acc[uid] = curr
+        else:
+            # reinicia acumulado si cambiamos de semana
+            week_acc[uid] = secs
+
+        # cálculo remaining
+        wh_secs = rec.user.weekly_hours * 3600
+        rem = wh_secs - week_acc[uid]
+
+        enriched.append({
+            "record": rec,
+            "duration_formatted": format_timedelta(dur),
+            "remaining": format_timedelta(timedelta(seconds=abs(int(rem)))),
+            "is_over": rem < 0
         })
 
-    return render_template("manage_records.html", records=records_with_duration)
+    return render_template("manage_records.html", records=enriched)
 
 @admin_bp.route("/records/edit/<int:record_id>", methods=["GET", "POST"])
 @admin_required
@@ -215,33 +273,24 @@ def edit_record(record_id):
     record = TimeRecord.query.get_or_404(record_id)
     if request.method == "POST":
         try:
-            check_in_str = request.form.get("check_in")
-            check_out_str = request.form.get("check_out")
-            date_str = request.form.get("date")
-            notes = request.form.get("notes")
-
-            record.date = datetime.strptime(date_str, "%Y-%m-%d").date()
-            record.check_in = datetime.strptime(f"{date_str} {check_in_str}", "%Y-%m-%d %H:%M:%S") if check_in_str else None
-            record.check_out = datetime.strptime(f"{date_str} {check_out_str}", "%Y-%m-%d %H:%M:%S") if check_out_str else None
-            record.notes = notes
+            ci = request.form.get("check_in")
+            co = request.form.get("check_out")
+            ds = request.form.get("date")
+            record.date      = datetime.strptime(ds, "%Y-%m-%d").date()
+            record.check_in  = datetime.strptime(f"{ds} {ci}", "%Y-%m-%d %H:%M:%S") if ci else None
+            record.check_out = datetime.strptime(f"{ds} {co}", "%Y-%m-%d %H:%M:%S") if co else None
+            record.notes     = request.form.get("notes")
             record.modified_by = session.get("user_id")
-
             if record.check_in and record.check_out and record.check_out < record.check_in:
-                flash("La hora de salida no puede ser anterior a la hora de entrada.", "danger")
+                flash("La hora de salida no puede ser anterior a la entrada.", "danger")
                 return render_template("record_form.html", record=record, form_data=request.form)
-
             db.session.commit()
-            flash(f"Registro del {record.date.strftime('%Y-%m-%d')} para {record.user.username} actualizado.", "success")
+            flash(f"Registro actualizado para {record.user.username}.", "success")
             return redirect(url_for("admin.manage_records"))
-
         except ValueError:
-            flash("Formato de fecha/hora inválido. Use YYYY-MM-DD y HH:MM:SS.", "danger")
-            return render_template("record_form.html", record=record, form_data=request.form)
-
+            flash("Formato fecha/hora inválido.", "danger")
         except Exception as e:
-            flash(f"Ocurrió un error inesperado: {str(e)}", "danger")
-            return render_template("record_form.html", record=record, form_data=request.form)
-
+            flash(f"Error inesperado: {e}", "danger")
     return render_template("record_form.html", record=record)
 
 @admin_bp.route("/records/delete/<int:record_id>", methods=["POST"])
@@ -250,5 +299,5 @@ def delete_record(record_id):
     record = TimeRecord.query.get_or_404(record_id)
     db.session.delete(record)
     db.session.commit()
-    flash("Registro de fichaje eliminado correctamente.", "success")
+    flash("Registro eliminado correctamente.", "success")
     return redirect(url_for("admin.manage_records"))
