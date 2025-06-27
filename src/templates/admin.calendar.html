@@ -42,8 +42,22 @@
 
 <section class="bg-gray-900 shadow-md rounded-lg p-6">
   {% if events %}
-    <!-- Aquí se implementará la vista de calendario -->
-    <p class="text-gray-400">(Calendario pendiente de implementación de componente JS)</p>
+    <div id="calendar"></div>
+    <script type="module">
+      import { Calendar } from 'https://cdn.skypack.dev/@fullcalendar/core';
+      import dayGridPlugin from 'https://cdn.skypack.dev/@fullcalendar/daygrid';
+
+      document.addEventListener('DOMContentLoaded', function () {
+        const calendarEl = document.getElementById('calendar');
+        const calendar = new Calendar(calendarEl, {
+          plugins: [dayGridPlugin],
+          initialView: 'dayGridMonth',
+          height: 'auto',
+          events: {{ events | tojson }},
+        });
+        calendar.render();
+      });
+    </script>
   {% else %}
     <p class="text-gray-500">Usa los filtros para buscar registros y verlos en el calendario.</p>
   {% endif %}
