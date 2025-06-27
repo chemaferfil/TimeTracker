@@ -68,3 +68,22 @@ def register():
         return redirect(url_for("auth.login"))
 
     return render_template("register.html")
+
+from functools import wraps
+from flask import session, redirect, url_for, flash
+from models.models import User  # agrega si no existe
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get("is_admin"):
+            flash("Acceso no autorizado. Se requieren permisos de administrador.", "danger")
+            return redirect(url_for("auth.login"))
+        # Check if user still exists and is admin in DB for extra seguridad
+        user = User.query.get(session.get("user_id"))
+        if not user or not user.is_admin:
+            session.clear()
+            flash("Tu cuenta ya no tiene permisos de administrador.", "danger")
+            return redirect(url_for("auth.login"))
+        return f(*args, **kwargs)
+    return decorated_function

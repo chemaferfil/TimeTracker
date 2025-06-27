@@ -11,11 +11,10 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
     weekly_hours = db.Column(db.Integer, nullable=False, default=0)
-    category = db.Column(
-        'categoria',
+    categoria = db.Column(  # ← que sea igual en toda la app (NO category)
         db.String(20),
         nullable=False,
-        default='Cocina'
+        default=''
     )
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

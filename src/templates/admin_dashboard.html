@@ -42,36 +42,46 @@
           <th class="px-5 py-3 border-b-2 border-gray-700">Notas</th>
         </tr>
       </thead>
-      <tbody class="text-gray-200">
-        {% for item in recent_records|reverse %}
-          <tr class="border-b border-gray-700 hover:bg-gray-800">
-            <td class="px-5 py-4 whitespace-nowrap">{{ item.record.user.username }}</td>
-            <td class="px-5 py-4 whitespace-nowrap">{{ item.record.date.strftime('%d-%m-%Y') }}</td>
-            <td class="px-5 py-4 whitespace-nowrap">
-              {{ item.record.check_in.strftime('%H:%M:%S') if item.record.check_in else '-' }}
-            </td>
-            <td class="px-5 py-4 whitespace-nowrap">
-              {{ item.record.check_out.strftime('%H:%M:%S') if item.record.check_out else '-' }}
-            </td>
-            <td class="px-5 py-4 whitespace-nowrap">{{ item.duration_formatted }}</td>
-            <td class="px-5 py-4 whitespace-nowrap">
-              {% if item.is_over %}
-                <span class="text-red-500">●</span> -{{ item.remaining_formatted }}
-              {% else %}
-                <span class="text-green-500">●</span> {{ item.remaining_formatted }}
-              {% endif %}
-            </td>
-            <td class="px-5 py-4 whitespace-nowrap">{{ item.record.user.category }}</td>
-            <td class="px-5 py-4">{{ item.record.notes or "" }}</td>
-          </tr>
+<tbody class="text-gray-200">
+  {% for item in recent_records %}
+    <tr class="border-b border-gray-700 hover:bg-gray-800">
+      <td class="px-5 py-4 whitespace-nowrap">{{ item.record.user.username }}</td>
+      <td class="px-5 py-4 whitespace-nowrap">{{ item.record.date.strftime('%d-%m-%Y') }}</td>
+      <td class="px-5 py-4 whitespace-nowrap">
+        {{ item.record.check_in.strftime('%H:%M:%S') if item.record.check_in else '-' }}
+      </td>
+      <td class="px-5 py-4 whitespace-nowrap">
+        {% if item.record.check_out %}
+          {{ item.record.check_out.strftime('%H:%M:%S') }}
+        {% elif item.is_open %}
+          <span class="text-yellow-400 font-bold">Pendiente</span>
         {% else %}
-          <tr>
-            <td colspan="8" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">
-              No hay registros recientes.
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
+          -
+        {% endif %}
+      </td>
+      <td class="px-5 py-4 whitespace-nowrap">
+        {{ item.duration_formatted }}
+      </td>
+      <td class="px-5 py-4 whitespace-nowrap">
+        {% if item.is_over %}
+          <span class="text-red-500">●</span> -{{ item.remaining_formatted }}
+        {% else %}
+          <span class="text-green-500">●</span> {{ item.remaining_formatted }}
+        {% endif %}
+      </td>
+      <td class="px-5 py-4 whitespace-nowrap">
+        {{ item.record.user.categoria or '-' }}
+      </td>
+      <td class="px-5 py-4">{{ item.record.notes or "" }}</td>
+    </tr>
+  {% else %}
+    <tr>
+      <td colspan="8" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">
+        No hay registros recientes.
+      </td>
+    </tr>
+  {% endfor %}
+</tbody>
     </table>
   </div>
 </section>
