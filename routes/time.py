@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from sqlalchemy import desc, text, and_
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime, date, timedelta
+import calendar
 from models.models import TimeRecord, User
 from models.database import db
 
@@ -136,3 +137,21 @@ def history():
         })
 
     return render_template("history.html", records=records_with_duration)
+
+@time_bp.route("/calendar")
+def calendar_view():
+    if "user_id" not in session:
+        return redirect(url_for("auth.login"))
+
+    year = request.args.get("year", default=date.today().year, type=int)
+    month = request.args.get("month", default=date.today().month, type=int)
+
+    cal = calendar.Calendar()
+    month_days = cal.monthdatescalendar(year, month)
+
+    return render_template(
+        "calendar.html",
+        year=year,
+        month=month,
+        month_days=month_days,
+    )

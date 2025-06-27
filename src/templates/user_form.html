@@ -83,6 +83,52 @@
                    class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink">
         </div>
 
+        <!-- Categoria -->
+        <div class="mb-4">
+            <label for="category" class="block text-sm font-medium text-gray-300 mb-1">
+                Categoria
+            </label>
+            <select id="category" name="category" required
+                    class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink">
+                <option value="">
+                    -- Selecciona categoría --
+                </option>
+
+                <option value="Cocina"
+                    {% if form_data and form_data.get('category') == 'Cocina' %}
+                        selected
+                    {% elif user and user.category == 'Cocina' %}
+                        selected
+                    {% endif %}>
+                    Cocina
+                </option>
+                <option value="Delivery"
+                    {% if form_data and form_data.get('category') == 'Delivery' %}
+                        selected
+                    {% elif user and user.category == 'Delivery' %}
+                        selected
+                    {% endif %}>
+                    Delivery
+                </option>
+                <option value="Reparto"
+                    {% if form_data and form_data.get('category') == 'Reparto' %}
+                        selected
+                    {% elif user and user.category == 'Reparto' %}
+                        selected
+                    {% endif %}>
+                    Reparto
+                </option>
+                <option value="Sala"
+                    {% if form_data and form_data.get('category') == 'Sala' %}
+                        selected
+                    {% elif user and user.category == 'Sala' %}
+                        selected
+                    {% endif %}>
+                    Sala
+                </option>
+            </select>
+        </div>
+
         <!-- Administrador -->
         <div class="mb-6 flex items-center">
             <input type="checkbox"

@@ -116,8 +116,9 @@ def add_user():
         email         = request.form.get("email")
         is_admin      = request.form.get("is_admin") == "on"
         weekly_hours  = request.form.get("weekly_hours", type=int)
+        category      = request.form.get("category")
 
-        if not all([username, password, full_name, email]) or weekly_hours is None:
+        if not all([username, password, full_name, email, category]) or weekly_hours is None:
             flash("Todos los campos son obligatorios.", "danger")
             return render_template(
                 "user_form.html",
@@ -139,7 +140,8 @@ def add_user():
             email=email,
             is_admin=is_admin,
             is_active=True,
-            weekly_hours=weekly_hours
+            weekly_hours=weekly_hours,
+            category=category
         )
         new_user.set_password(password)
         db.session.add(new_user)
@@ -177,9 +179,9 @@ def edit_user(user_id):
                 return render_template("user_form.html", user=user, action="edit", form_data=request.form)
             user.email = new_email
 
-        # full_name y weekly_hours
         user.full_name    = request.form.get("full_name")
         user.weekly_hours = request.form.get("weekly_hours", type=int)
+        user.category     = request.form.get("category")
 
         if user.id != session.get("user_id"):
             user.is_admin  = (request.form.get("is_admin")=="on")
@@ -228,7 +230,7 @@ def manage_records():
         TimeRecord.query
         .join(User, TimeRecord.user_id == User.id)
         .filter(TimeRecord.check_out.isnot(None))
-        .order_by(TimeRecord.date.desc(), TimeRecord.check_in.desc())
+        .order_by(TimeRecord.check_in.desc())
         .all()
     )
 
@@ -301,3 +303,55 @@ def delete_record(record_id):
     db.session.commit()
     flash("Registro eliminado correctamente.", "success")
     return redirect(url_for("admin.manage_records"))
+
+@admin_bp.route("/calendar")
+@admin_required
+def calendar():
+    users = User.query.order_by(User.username).all()
+
+    selected_user_id = request.args.get("user_id", type=int)
+    start_date_str = request.args.get("start_date")
+    end_date_str = request.args.get("end_date")
+
+    start_date = (
+        datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        if start_date_str else None
+    )
+    end_date = (
+        datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        if end_date_str else None
+    )
+
+    query = TimeRecord.query
+    if selected_user_id:
+        query = query.filter_by(user_id=selected_user_id)
+    if start_date:
+        query = query.filter(TimeRecord.date >= start_date)
+    if end_date:
+        query = query.filter(TimeRecord.date <= end_date)
+
+    records = query.order_by(TimeRecord.date).all()
+
+    events = []
+    for rec in records:
+        if rec.check_in:
+            events.append({
+                "title": f"{rec.user.username} entrada",
+                "start": rec.check_in.isoformat(),
+            })
+        if rec.check_out:
+            events.append({
+                "title": f"{rec.user.username} salida",
+                "start": rec.check_out.isoformat(),
+            })
+
+    return render_template(
+        "admin.calendar.html",
+        users=users,
+        categories=[],
+        selected_user_id=selected_user_id,
+        selected_category=None,
+        start_date=start_date_str or "",
+        end_date=end_date_str or "",
+        events=events,
+    )

@@ -57,7 +57,8 @@
           {'endpoint': 'admin.dashboard',    'label': 'Dashboard'},
           {'endpoint': 'admin.manage_users', 'label': 'Gestionar Usuarios'},
           {'endpoint': 'admin.manage_records','label': 'Gestionar Registros'},
-          {'endpoint': 'export.export_excel', 'label': 'Exportar Excel'}
+          {'endpoint': 'admin.calendar',     'label': 'Calendario'},
+          {'endpoint': 'export.export_excel',   'label': 'Exportar Excel'}
         ] %}
         {% for link in links %}
           {% set active = request.endpoint.startswith(link.endpoint) %}

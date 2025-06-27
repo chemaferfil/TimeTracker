@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}Calendario de Fichajes{% endblock %}
+
+{% block header %}<span class="text-miss-sushi-pink">Calendario de Registros</span>{% endblock %}
+
+{% block content %}
+<section class="bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+  <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+    <div>
+      <label for="user_id" class="block text-sm font-medium text-gray-200">Usuario</label>
+      <select name="user_id" id="user_id" class="mt-1 block w-full bg-gray-700 border-gray-600 text-white">
+        <option value="">Todos</option>
+        {% for u in users %}
+          <option value="{{ u.id }}" {% if selected_user_id == u.id %}selected{% endif %}>{{ u.username }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="category" class="block text-sm font-medium text-gray-200">Categoría</label>
+      <select name="category" id="category" class="mt-1 block w-full bg-gray-700 border-gray-600 text-white">
+        <option value="">Todas</option>
+        {% for cat in categories %}
+          <option value="{{ cat }}" {% if selected_category == cat %}selected{% endif %}>{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="start_date" class="block text-sm font-medium text-gray-200">Desde</label>
+      <input type="date" name="start_date" id="start_date" value="{{ start_date }}" class="mt-1 block w-full bg-gray-700 border-gray-600 text-white">
+    </div>
+    <div>
+      <label for="end_date" class="block text-sm font-medium text-gray-200">Hasta</label>
+      <input type="date" name="end_date" id="end_date" value="{{ end_date }}" class="mt-1 block w-full bg-gray-700 border-gray-600 text-white">
+    </div>
+    <div class="md:col-span-4 text-right">
+      <button type="submit" class="px-4 py-2 bg-fuchsia-700 text-white rounded hover:bg-fuchsia-800">Filtrar</button>
+      <a href="{{ url_for('admin.calendar') }}" class="ml-2 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">Limpiar</a>
+    </div>
+  </form>
+</section>
+
+<section class="bg-gray-900 shadow-md rounded-lg p-6">
+  {% if events %}
+    <!-- Aquí se implementará la vista de calendario -->
+    <p class="text-gray-400">(Calendario pendiente de implementación de componente JS)</p>
+  {% else %}
+    <p class="text-gray-500">Usa los filtros para buscar registros y verlos en el calendario.</p>
+  {% endif %}
+</section>
+{% endblock %}

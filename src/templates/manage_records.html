@@ -33,6 +33,7 @@
                     <th class="px-5 py-3 border-b-2 border-gray-700">Salida</th>
                     <th class="px-5 py-3 border-b-2 border-gray-700">Tiempo Trabajado</th>
                     <th class="px-5 py-3 border-b-2 border-gray-700">Horas Restantes</th>
+                    <th class="px-5 py-3 border-b-2 border-gray-700">Categoría</th>
                     <th class="px-5 py-3 border-b-2 border-gray-700">Notas</th>
                     <th class="px-5 py-3 border-b-2 border-gray-700">Última Modificación</th>
                     <th class="px-5 py-3 border-b-2 border-gray-700">Acciones</th>
@@ -57,6 +58,7 @@
                           <span class="text-green-500">●</span> {{ item.remaining }}
                         {% endif %}
                     </td>
+                    <td class="px-5 py-4">{{ item.record.user.category }}</td>
                     <td class="px-5 py-4">{{ item.record.notes or "" }}</td>
                     <td class="px-5 py-4 whitespace-nowrap">
                         {{ item.record.updated_at.strftime("%d-%m-%Y %H:%M:%S") if item.record.updated_at else "-" }}
@@ -77,7 +79,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="9" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">
+                    <td colspan="10" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">
                         No hay registros para mostrar.
                     </td>
                 </tr>

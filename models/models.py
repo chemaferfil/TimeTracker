@@ -10,7 +10,13 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
-    weekly_hours = db.Column(db.Integer, nullable=False, default=0) 
+    weekly_hours = db.Column(db.Integer, nullable=False, default=0)
+    category = db.Column(
+        'categoria',
+        db.String(20),
+        nullable=False,
+        default='Cocina'
+    )
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     time_records = db.relationship(
@@ -42,3 +48,20 @@ class TimeRecord(db.Model):
 
     def __repr__(self):
         return f'<TimeRecord {self.id} - User {self.user_id}>'
+
+class EmployeeStatus(db.Model):
+    __tablename__ = 'employee_status'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    category = db.Column(db.Enum('', 'Cocina', 'Delivery', 'Reparto', 'Sala'), nullable=False, default='')
+    status = db.Column(db.Enum('', 'Trabajado', 'Baja', 'Ausente', 'Vacaciones'), nullable=False, default='')
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('User', backref='statuses', lazy=True)
+
+    def __repr__(self):
+        return f'<EmployeeStatus {self.id} - User {self.user_id} - {self.date}>'
