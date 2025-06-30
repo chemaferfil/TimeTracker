@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Fichajes abiertos{% endblock %}
+{% block header %}Fichajes abiertos (sin salida){% endblock %}
+{% block content %}
+
+<section class="bg-gray-800 p-6 rounded shadow mt-6">
+  <h2 class="text-lg font-bold text-white mb-4">Fichajes abiertos</h2>
+  {% if open_records %}
+  <table class="min-w-full text-white mb-4">
+    <thead>
+      <tr>
+        <th class="px-4 py-2">Usuario</th>
+        <th class="px-4 py-2">Fecha</th>
+        <th class="px-4 py-2">Entrada</th>
+        <th class="px-4 py-2">Cerrar con hora...</th>
+        <th class="px-4 py-2"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in open_records %}
+      <tr>
+        <td class="px-4 py-2">{{ r.user.full_name or r.user.username }}</td>
+        <td class="px-4 py-2">{{ r.date }}</td>
+        <td class="px-4 py-2">{{ r.check_in.strftime('%H:%M') }}</td>
+        <td class="px-4 py-2">
+          <form method="POST" class="flex gap-2 items-center">
+            <input type="hidden" name="record_id" value="{{ r.id }}">
+            <input type="datetime-local" name="close_time" required
+                   value="{{ r.check_in.strftime('%Y-%m-%dT%H:%M') }}">
+            <button class="bg-fuchsia-700 text-white rounded px-2 py-1 text-sm hover:bg-fuchsia-800">Cerrar</button>
+          </form>
+        </td>
+        <td>
+          <small class="text-yellow-400">Sin salida</small>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <div class="text-gray-400">No hay fichajes abiertos.</div>
+  {% endif %}
+</section>
+{% endblock %}

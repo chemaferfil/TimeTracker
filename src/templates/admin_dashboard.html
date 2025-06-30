@@ -4,14 +4,24 @@
 
 {% block content %}
 <section class="bg-gray-800 shadow-md rounded-lg p-6 mb-8">
-  <div class="flex justify-between items-center mb-4">
-    <h2 class="font-semibold text-lg text-gray-200">Resumen Rápido</h2>
-    <a href="{{ url_for('admin.dashboard') }}" class="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-fuchsia-700 hover:bg-fuchsia-800">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-      </svg>
-      Actualizar
-    </a>
+  <div class="mb-4">
+    <span class="font-semibold text-lg text-gray-200">Resumen Rápido</span>
+    <div class="flex flex-row gap-2 mt-2">
+      <a href="{{ url_for('admin.dashboard') }}"
+         class="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-fuchsia-700 hover:bg-fuchsia-800">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Actualizar
+      </a>
+      <a href="{{ url_for('admin.open_records') }}"
+         class="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-yellow-600 hover:bg-yellow-700">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Fichajes abiertos
+      </a>
+    </div>
   </div>
   <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
     <div class="bg-fuchsia-800 rounded p-4 flex flex-col items-center shadow">

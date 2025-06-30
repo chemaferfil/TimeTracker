@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-
 {% block title %}Exportar a Excel - Admin{% endblock %}
 
 {% block content %}
@@ -7,45 +6,66 @@
     <h2 class="text-3xl font-bold text-gray-200 mb-6">Exportar Registros a Excel</h2>
 
     <div class="bg-gray-900 shadow-md rounded-lg p-6">
-        <form method="POST" action="{{ url_for("export.export_excel") }}">
-            {# CSRF token might be needed depending on global Flask-WTF setup #}
-            {# {{ form.hidden_tag() }} #}
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <form method="POST" action="{{ url_for('export.export_excel') }}">
+            <!-- FILA: Usuario, Categoría, Jornada semanal -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 <div>
-                    <label for="start_date" class="block text-gray-400 text-sm font-bold mb-2">Fecha de Inicio (Opcional):</label>
-                    <input type="date" id="start_date" name="start_date"
-                           class="shadow appearance-auto border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
-                    <p class="text-gray-500 text-xs mt-1">Por defecto, inicio del mes actual.</p>
+                    <label for="user_id" class="block text-gray-400 text-sm font-bold mb-2">Usuario:</label>
+                    <select id="user_id" name="user_id" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
+                        <option value="">Todos</option>
+                        {% for user in users %}
+                        <option value="{{ user.id }}">{{ user.username }} ({{ user.full_name }})</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div>
-                    <label for="end_date" class="block text-gray-400 text-sm font-bold mb-2">Fecha de Fin (Opcional):</label>
-                    <input type="date" id="end_date" name="end_date"
-                           class="shadow appearance-auto border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
-                    <p class="text-gray-500 text-xs mt-1">Por defecto, día actual.</p>
+                    <label for="categoria" class="block text-gray-400 text-sm font-bold mb-2">Categoría:</label>
+                    <select id="categoria" name="categoria" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
+                        <option value="">Todas</option>
+                        <option value="Cocina">Cocina</option>
+                        <option value="Sala">Sala</option>
+                        <option value="Reparto">Reparto</option>
+                        <option value="Delivery">Delivery</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="jornada" class="block text-gray-400 text-sm font-bold mb-2">Jornada semanal (horas):</label>
+                    <input type="number" id="jornada" name="jornada" min="0"
+                           class="shadow appearance-auto border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500"
+                           placeholder="Ej: 40">
                 </div>
             </div>
 
-            <div class="mb-6">
-                <label for="user_id" class="block text-gray-400 text-sm font-bold mb-2">Usuario (Opcional):</label>
-                <select id="user_id" name="user_id" 
-                        class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
-                    <option value="">Todos los Usuarios</option>
-                    {# Populate with users from backend - Placeholder #}
-                    {% for user in users %}
-                    <option value="{{ user.id }}">{{ user.username }} ({{ user.full_name }})</option>
-                    {% endfor %}
-                </select>
-                 <p class="text-gray-500 text-xs mt-1">Por defecto, todos los usuarios.</p>
-           </div>
-
-            <div class="flex items-center justify-start">
-                <button type="submit" class="bg-fuchsia-800 hover:bg-fuchsia-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline cursor-pointer">
-                    Generar y Descargar Excel
-                </button>
+            <!-- FILA: Fechas y botones -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 items-end mb-4">
+                <div>
+                    <label for="start_date" class="block text-gray-400 text-sm font-bold mb-2">Fecha de Inicio:</label>
+                    <input type="date" id="start_date" name="start_date"
+                           class="shadow appearance-auto border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
+                </div>
+                <div>
+                    <label for="end_date" class="block text-gray-400 text-sm font-bold mb-2">Fecha de Fin:</label>
+                    <input type="date" id="end_date" name="end_date"
+                           class="shadow appearance-auto border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
+                </div>
+                <div>
+                    <button type="submit"
+                        class="bg-fuchsia-800 hover:bg-fuchsia-700 text-white font-bold py-2 px-4 rounded w-full focus:outline-none focus:shadow-outline cursor-pointer mt-6">
+                        Descargar Excel
+                    </button>
+                </div>
+                <div class="flex gap-2 mt-6">
+                    <a href="{{ url_for('export.export_excel_daily') }}?fecha={{ today }}"
+                       class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow w-full text-center">
+                       Descargar Excel Diario
+                    </a>
+                    <a href="{{ url_for('export.export_pdf_daily') }}?fecha={{ today }}"
+                       class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow w-full text-center">
+                       Descargar PDF Diario
+                    </a>
+                </div>
             </div>
         </form>
     </div>
 </div>
 {% endblock %}
-

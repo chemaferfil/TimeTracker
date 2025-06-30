@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% block title %}Ficha de {{ user.full_name or user.username }}{% endblock %}
+{% block header %}
+  <span class="text-miss-sushi-pink">
+    Ficha de {{ user.full_name or user.username }}
+  </span>
+{% endblock %}
+
+{% block extra_head %}
+  <!-- FullCalendar -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.17/locales-all.global.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto bg-gray-900 border border-gray-700 rounded-lg shadow-md p-8">
+
+  <!-- ----------  FORMULARIO NUEVO RANGO  ---------- -->
+  <form method="POST" class="grid md:grid-cols-5 gap-4 mb-8">
+    <div>
+      <label class="block text-sm text-gray-300 mb-1">Fecha inicio *</label>
+      <input type="date" name="start_date" required
+             class="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-gray-100">
+    </div>
+
+    <div>
+      <label class="block text-sm text-gray-300 mb-1">Fecha final</label>
+      <input type="date" name="end_date"
+             class="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-gray-100">
+    </div>
+
+    <div>
+      <label class="block text-sm text-gray-300 mb-1">Estado *</label>
+      <select name="status" required
+              class="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-gray-100">
+        <option>Trabajado</option>
+        <option>Baja</option>
+        <option>Ausente</option>
+        <option>Vacaciones</option>
+      </select>
+    </div>
+
+    <div class="md:col-span-2">
+      <label class="block text-sm text-gray-300 mb-1">Notas</label>
+      <input type="text" name="notes"
+             class="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-gray-100">
+    </div>
+
+    <div class="md:col-span-5 flex justify-end">
+      <button class="bg-fuchsia-700 hover:bg-fuchsia-800 px-6 py-2 rounded text-white">
+        Añadir
+      </button>
+    </div>
+  </form>
+
+  <!-- ----------  CALENDARIO PERSONAL  ---------- -->
+  <div id="user-calendar"></div>
+
+  <!-- ----------  MODAL DE EDICIÓN  ---------- -->
+  <div id="editModal" class="fixed inset-0 z-50 flex items-center justify-center hidden" style="background:rgba(0,0,0,0.5);">
+    <div class="bg-gray-900 rounded-lg shadow-lg p-8 w-full max-w-md relative">
+      <h3 class="text-lg font-bold text-gray-100 mb-4">Editar estado</h3>
+      <form id="editStatusForm" method="POST">
+        <input type="hidden" name="edit_status_id" id="edit_status_id">
+        <div class="mb-4">
+          <label class="block text-sm text-gray-300 mb-1">Fecha</label>
+          <input type="text" id="edit_date" name="edit_date" readonly class="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-gray-100">
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm text-gray-300 mb-1">Estado</label>
+          <select id="edit_status" name="edit_status" class="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-gray-100">
+            <option value="Trabajado">Trabajado</option>
+            <option value="Baja">Baja</option>
+            <option value="Ausente">Ausente</option>
+            <option value="Vacaciones">Vacaciones</option>
+          </select>
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm text-gray-300 mb-1">Notas</label>
+          <input type="text" id="edit_notes" name="edit_notes" class="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-gray-100">
+        </div>
+        <div class="flex justify-between mt-6">
+          <button type="button" id="closeModalBtn" class="bg-gray-700 hover:bg-gray-800 px-4 py-2 rounded text-white">Cancelar</button>
+          <button type="submit" class="bg-fuchsia-700 hover:bg-fuchsia-800 px-4 py-2 rounded text-white">Guardar cambios</button>
+          <form method="POST" id="deleteForm" style="display:inline;">
+            <button type="button" id="deleteBtn" class="bg-red-700 hover:bg-red-800 px-4 py-2 rounded text-white">Eliminar</button>
+          </form>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // ---------- FULLCALENDAR ----------
+  const cal = new FullCalendar.Calendar(document.getElementById('user-calendar'), {
+    initialView : 'dayGridMonth',
+    firstDay    : 1,
+    locale      : 'es',
+    height      : 'auto',
+    eventDisplay: 'block',
+
+    events(info, success, fail) {
+      const url = `/admin/api/events?user_id={{ user.id }}&start=${info.startStr}&end=${info.endStr}`;
+      fetch(url).then(r => r.json()).then(success).catch(fail);
+    },
+
+    eventClick(info) {
+      // Mostrar modal de edición
+      const modal = document.getElementById('editModal');
+      modal.classList.remove('hidden');
+      document.getElementById('edit_status_id').value = info.event.id;
+      document.getElementById('edit_date').value = info.event.startStr;
+      document.getElementById('edit_status').value = info.event.title.split(' - ')[0];
+      document.getElementById('edit_notes').value = info.event.extendedProps.notes || '';
+
+      // Delete (enviar POST)
+      document.getElementById('deleteBtn').onclick = function() {
+        if (confirm('¿Eliminar este estado?')) {
+          fetch(`/admin/employees/{{ user.id }}/status/delete/${info.event.id}`, {method: 'POST'})
+            .then(() => window.location.reload());
+        }
+      };
+    }
+  });
+  cal.render();
+
+  // Cerrar modal
+  document.getElementById('closeModalBtn').onclick = function() {
+    document.getElementById('editModal').classList.add('hidden');
+  };
+
+  // Guardar cambios al editar
+  document.getElementById('editStatusForm').onsubmit = function(e) {
+    e.preventDefault();
+    const status_id = document.getElementById('edit_status_id').value;
+    const status = document.getElementById('edit_status').value;
+    const notes = document.getElementById('edit_notes').value;
+    fetch(`/admin/employees/{{ user.id }}/status/edit/${status_id}`, {
+      method: "POST",
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({status, notes})
+    }).then(() => window.location.reload());
+  };
+});
+</script>
+{% endblock %}

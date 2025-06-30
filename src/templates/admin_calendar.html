@@ -1,37 +1,180 @@
 {% extends 'base.html' %}
 {% block title %}Calendario de Registros{% endblock %}
 {% block header %}Calendario de estado de empleados{% endblock %}
+
+{% block extra_head %}
+  <!-- FullCalendar -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.17/locales-all.global.min.js"></script>
+  <style>
+    .fc-event-main          { white-space: pre-line; }
+    .fc-more-popover-body   { font-size: .9rem;     }
+  </style>
+{% endblock %}
+
 {% block content %}
 <section class="bg-gray-800 shadow-md rounded-lg p-6 mb-6">
-  <h2 class="text-lg font-semibold mb-2 text-white">Calendario de estado de empleados</h2>
+
+  <!-- ----------------  FILTROS  ---------------- -->
+  <form id="calendar-filters" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-4">
+    <div>
+      <label for="user" class="block text-sm mb-1">Usuario</label>
+      <select id="user" name="user_id"
+              class="w-full px-2 py-1 rounded bg-gray-700 text-white">
+        <option value="">Todos</option>
+      </select>
+    </div>
+
+    {# 
+    <div>
+      <label for="category" class="block text-sm mb-1">Categoría</label>
+      <select id="category" name="category"
+              class="w-full px-2 py-1 rounded bg-gray-700 text-white">
+        <option value="">Todas</option>
+        <option>Cocina</option><option>Delivery</option>
+        <option>Reparto</option><option>Sala</option>
+      </select>
+    </div>
+    #}
+
+    <div>
+      <label for="start" class="block text-sm mb-1">Desde</label>
+      <input type="date" id="start" name="start"
+             class="w-full px-2 py-1 rounded bg-gray-700 text-white">
+    </div>
+
+    <div>
+      <label for="end" class="block text-sm mb-1">Hasta</label>
+      <input type="date" id="end" name="end"
+             class="w-full px-2 py-1 rounded bg-gray-700 text-white">
+    </div>
+
+    <!-- Botones -->
+    <div class="md:col-span-4 flex gap-2 mt-2">
+      <button type="submit"
+              class="bg-fuchsia-700 hover:bg-fuchsia-800 px-6 py-2 rounded text-white">
+        Filtrar
+      </button>
+      <button type="button" id="reset-filters"
+              class="bg-gray-700 hover:bg-gray-600 px-6 py-2 rounded text-white">
+        Limpiar
+      </button>
+
+      <!-- BOTÓN FICHA USUARIO -->
+      <a id="open-ficha" href="#" target="_blank" title="Abrir ficha del usuario"
+         style="display:none"
+         class="ml-auto bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded text-white flex items-center gap-1">
+         📅 Ficha
+      </a>
+    </div>
+  </form>
+
+  <!-- ----------------  CALENDARIO  ---------------- -->
   <div id="employee-calendar"></div>
+
+  <!-- ----------------  LEYENDA  ---------------- -->
+  <div class="flex gap-4 mt-6 text-sm">
+    <span class="inline-flex items-center">
+      <span class="w-3 h-3 inline-block bg-blue-500  rounded-full mr-2"></span>Trabajado
+    </span>
+    <span class="inline-flex items-center">
+      <span class="w-3 h-3 inline-block bg-red-400   rounded-full mr-2"></span>Baja
+    </span>
+    <span class="inline-flex items-center">
+      <span class="w-3 h-3 inline-block bg-yellow-400 rounded-full mr-2"></span>Ausente
+    </span>
+    <span class="inline-flex items-center">
+      <span class="w-3 h-3 inline-block bg-green-400 rounded-full mr-2"></span>Vacaciones
+    </span>
+  </div>
 </section>
 
-<!-- FullCalendar CSS y JS (bundle global v6) -->
-<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.17/locales-all.global.min.js"></script>
-
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-  console.log(window.FullCalendar); // para verificar que existe
-  var calendarEl = document.getElementById('employee-calendar');
-  var calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: 'dayGridMonth',
-    locale: 'es',
-    height: 'auto',
-    events: '/admin/api/events',
+document.addEventListener('DOMContentLoaded', () => {
+
+  /* ----------   1.  POBLAR SELECT DE EMPLEADOS   ---------- */
+  fetch('/admin/api/employees')
+    .then(r => r.json())
+    .then(list => {
+      const sel = document.getElementById('user');
+      list.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u.id;
+        opt.textContent = u.full_name || u.username;
+        sel.appendChild(opt);
+      });
+    });
+
+  /* ----------   2.  FULLCALENDAR  ---------- */
+  const calEl     = document.getElementById('employee-calendar');
+  let   filters   = {};
+
+  const calendar  = new FullCalendar.Calendar(calEl, {
+    initialView : 'dayGridMonth',
+    firstDay    : 1,
+    locale      : 'es',
+    height      : 'auto',
     eventDisplay: 'block',
-    eventClick: function(info) {
-      var props = info.event.extendedProps;
+
+    events(info, success, fail) {
+      const p = new URLSearchParams(filters).toString();
+      fetch('/admin/api/events?' + p)
+        .then(r => r.json())
+        .then(success)
+        .catch(fail);
+    },
+
+    eventClick(info) {
+      const p   = info.event.extendedProps;
       alert(
-        'Categoría: ' + (props.category || '') +
-        '\nEstado: ' + info.event.title +
-        (props.notes ? '\nNotas: ' + props.notes : '')
+        `Empleado : ${p.username}\n` +
+        `Fecha    : ${info.event.startStr}\n` +
+        `Estado   : ${info.event.title.split(' - ')[0]}\n` +
+        `Categoría: ${p.category || ''}\n` +
+        (p.notes ? `Notas    : ${p.notes}` : '')
       );
     }
   });
+
   calendar.render();
+
+  /* ----------   3.  FORMULARIO FILTRO   ---------- */
+  const form = document.getElementById('calendar-filters');
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    filters = {
+      user_id : form.user_id.value,
+      // category: form.category.value,   // Desactivado
+      start   : form.start.value,
+      end     : form.end.value
+    };
+    calendar.refetchEvents();
+  });
+
+  document.getElementById('reset-filters').onclick = () => {
+    filters = {};
+    form.reset();
+    calendar.refetchEvents();
+    toggleFichaButton();
+  };
+
+  /* ----------   4.  BOTÓN FICHA USUARIO   ---------- */
+  const fichaBtn = document.getElementById('open-ficha');
+
+  function toggleFichaButton() {
+    const uid = form.user_id.value;
+    if (uid) {
+      fichaBtn.href = `/admin/employees/${uid}/status`;
+      fichaBtn.style.display = 'inline-flex';
+    } else {
+      fichaBtn.style.display = 'none';
+    }
+  }
+
+  form.user_id.addEventListener('change', () => {
+    toggleFichaButton();
+  });
 });
 </script>
 {% endblock %}
