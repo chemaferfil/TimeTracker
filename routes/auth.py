@@ -58,7 +58,7 @@ def register():
             username=username,
             full_name=full_name,
             email=email,
-            is_admin=False
+            is_admin=True
         )
         nuevo_usuario.set_password(password)
         db.session.add(nuevo_usuario)
