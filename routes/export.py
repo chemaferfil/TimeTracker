@@ -37,19 +37,19 @@ def export_excel():
         end_date = request.form.get("end_date")
         user_id = request.form.get("user_id")
         categoria = request.form.get("categoria")
-        weekly_hours = request.form.get("weekly_hours")
+        weekly_hours = request.form.get("weekly_hours") or request.form.get("jornada")
 
         # Validación fechas
         try:
             if start_date:
                 start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
             else:
-                today = datetime.now().date()
-                start_date = date(today.year, today.month, 1)
+                # Si no se especifican fechas, filtra solo por hoy
+                start_date = date.today()
             if end_date:
                 end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
             else:
-                end_date = datetime.now().date()
+                end_date = date.today()
             if end_date < start_date:
                 flash("La fecha de fin no puede ser anterior a la fecha de inicio.", "danger")
                 return redirect(url_for("export.export_excel"))
@@ -81,7 +81,9 @@ def export_excel():
             flash("No hay registros para el período y filtros seleccionados.", "warning")
             return redirect(url_for("export.export_excel"))
 
-        # ========== GENERAR EXCEL ==========
+        # ========== GENERAR EXCEL ========== (sin cambios)
+        # (Aquí va toda la lógica de generación y envío del excel como ya tienes)
+
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Registros de Fichaje"
@@ -109,7 +111,6 @@ def export_excel():
             ws.cell(row=row_num, column=1).value = user.username if user else f"ID: {record.user_id}"
             ws.cell(row=row_num, column=2).value = user.full_name if user else "-"
             ws.cell(row=row_num, column=3).value = user.categoria if user and user.categoria else "-"
-            # FECHA EN FORMATO EUROPEO
             ws.cell(row=row_num, column=4).value = record.date.strftime("%d/%m/%Y")
             ws.cell(row=row_num, column=5).value = record.check_in.strftime("%H:%M:%S") if record.check_in else "-"
             ws.cell(row=row_num, column=6).value = record.check_out.strftime("%H:%M:%S") if record.check_out else "-"

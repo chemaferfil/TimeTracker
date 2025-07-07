@@ -8,8 +8,8 @@
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.17/locales-all.global.min.js"></script>
   <style>
-    .fc-event-main          { white-space: pre-line; }
-    .fc-more-popover-body   { font-size: .9rem;     }
+    .fc-event-main        { white-space: pre-line; }
+    .fc-more-popover-body { font-size: .9rem;     }
   </style>
 {% endblock %}
 
@@ -18,6 +18,7 @@
 
   <!-- ----------------  FILTROS  ---------------- -->
   <form id="calendar-filters" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-4">
+    <!-- Usuario -->
     <div>
       <label for="user" class="block text-sm mb-1">Usuario</label>
       <select id="user" name="user_id"
@@ -26,18 +27,7 @@
       </select>
     </div>
 
-    {# 
-    <div>
-      <label for="category" class="block text-sm mb-1">Categoría</label>
-      <select id="category" name="category"
-              class="w-full px-2 py-1 rounded bg-gray-700 text-white">
-        <option value="">Todas</option>
-        <option>Cocina</option><option>Delivery</option>
-        <option>Reparto</option><option>Sala</option>
-      </select>
-    </div>
-    #}
-
+    <!-- Desde / Hasta -->
     <div>
       <label for="start" class="block text-sm mb-1">Desde</label>
       <input type="date" id="start" name="start"
@@ -51,7 +41,7 @@
     </div>
 
     <!-- Botones -->
-    <div class="md:col-span-4 flex gap-2 mt-2">
+    <div class="md:col-span-4 flex flex-wrap gap-2 mt-2 items-center">
       <button type="submit"
               class="bg-fuchsia-700 hover:bg-fuchsia-800 px-6 py-2 rounded text-white">
         Filtrar
@@ -62,32 +52,36 @@
       </button>
 
       <!-- BOTÓN FICHA USUARIO -->
-      <a id="open-ficha" href="#" target="_blank" title="Abrir ficha del usuario"
-         style="display:none"
-         class="ml-auto bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded text-white flex items-center gap-1">
+      <a id="open-ficha" href="#" target="_blank"
+         class="ml-auto bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded text-white flex items-center gap-1 hidden">
          📅 Ficha
       </a>
+    </div>
+
+    <!-- Checkboxes de Estado -->
+    <div class="md:col-span-4 flex flex-wrap gap-4 mt-4 text-sm">
+      <label class="inline-flex items-center gap-1">
+        <input type="checkbox" class="status-filter" value="Trabajado" checked>
+        <span class="text-blue-400">Trabajado</span>
+      </label>
+      <label class="inline-flex items-center gap-1">
+        <input type="checkbox" class="status-filter" value="Baja" checked>
+        <span class="text-red-400">Baja</span>
+      </label>
+      <label class="inline-flex items-center gap-1">
+        <input type="checkbox" class="status-filter" value="Ausente" checked>
+        <span class="text-yellow-400">Ausente</span>
+      </label>
+      <label class="inline-flex items-center gap-1">
+        <input type="checkbox" class="status-filter" value="Vacaciones" checked>
+        <span class="text-green-400">Vacaciones</span>
+      </label>
     </div>
   </form>
 
   <!-- ----------------  CALENDARIO  ---------------- -->
   <div id="employee-calendar"></div>
 
-  <!-- ----------------  LEYENDA  ---------------- -->
-  <div class="flex gap-4 mt-6 text-sm">
-    <span class="inline-flex items-center">
-      <span class="w-3 h-3 inline-block bg-blue-500  rounded-full mr-2"></span>Trabajado
-    </span>
-    <span class="inline-flex items-center">
-      <span class="w-3 h-3 inline-block bg-red-400   rounded-full mr-2"></span>Baja
-    </span>
-    <span class="inline-flex items-center">
-      <span class="w-3 h-3 inline-block bg-yellow-400 rounded-full mr-2"></span>Ausente
-    </span>
-    <span class="inline-flex items-center">
-      <span class="w-3 h-3 inline-block bg-green-400 rounded-full mr-2"></span>Vacaciones
-    </span>
-  </div>
 </section>
 
 <script>
@@ -108,20 +102,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ----------   2.  FULLCALENDAR  ---------- */
   const calEl     = document.getElementById('employee-calendar');
-  let   filters   = {};
+  let   baseQuery = {};   // user / fecha  → filtrado en el servidor
+  let   activeStatuses = ['Trabajado', 'Baja', 'Ausente', 'Vacaciones']; // cliente
 
   const calendar  = new FullCalendar.Calendar(calEl, {
     initialView : 'dayGridMonth',
     firstDay    : 1,
     locale      : 'es',
     height      : 'auto',
+    dayMaxEvents: 3,           // “+ n más” si se supera
     eventDisplay: 'block',
 
     events(info, success, fail) {
-      const p = new URLSearchParams(filters).toString();
+      /* 1)  Obtener los eventos del back-end con los filtros básicos   */
+      const p = new URLSearchParams(baseQuery).toString();
       fetch('/admin/api/events?' + p)
         .then(r => r.json())
-        .then(success)
+        /* 2)  Filtrado por estado en cliente                         */
+        .then(events => {
+          const filtered = events.filter(ev => {
+            const status = ev.title.split(' - ')[0]; // «Trabajado - Pepe»
+            return activeStatuses.includes(status);
+          });
+          success(filtered);
+        })
         .catch(fail);
     },
 
@@ -139,22 +143,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
   calendar.render();
 
-  /* ----------   3.  FORMULARIO FILTRO   ---------- */
+  /* ----------   3.  FORMULARIO FILTRO (usuario / fechas)   ---------- */
   const form = document.getElementById('calendar-filters');
+
   form.addEventListener('submit', e => {
     e.preventDefault();
-    filters = {
+    baseQuery = {
       user_id : form.user_id.value,
-      // category: form.category.value,   // Desactivado
       start   : form.start.value,
       end     : form.end.value
     };
     calendar.refetchEvents();
+    toggleFichaButton();
   });
 
   document.getElementById('reset-filters').onclick = () => {
-    filters = {};
+    baseQuery = {};
     form.reset();
+    document.querySelectorAll('.status-filter').forEach(cb => cb.checked = true);
+    activeStatuses = ['Trabajado', 'Baja', 'Ausente', 'Vacaciones'];
     calendar.refetchEvents();
     toggleFichaButton();
   };
@@ -166,15 +173,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const uid = form.user_id.value;
     if (uid) {
       fichaBtn.href = `/admin/employees/${uid}/status`;
-      fichaBtn.style.display = 'inline-flex';
+      fichaBtn.classList.remove('hidden');
     } else {
-      fichaBtn.style.display = 'none';
+      fichaBtn.classList.add('hidden');
     }
   }
+  form.user_id.addEventListener('change', toggleFichaButton);
 
-  form.user_id.addEventListener('change', () => {
-    toggleFichaButton();
-  });
+  /* ----------   5.  CHECKBOXES DE ESTADO   ---------- */
+  function updateStatuses() {
+    activeStatuses = [...document.querySelectorAll('.status-filter:checked')]
+                     .map(cb => cb.value);
+    calendar.refetchEvents();
+  }
+  document.querySelectorAll('.status-filter')
+          .forEach(cb => cb.addEventListener('change', updateStatuses));
+
 });
 </script>
 {% endblock %}

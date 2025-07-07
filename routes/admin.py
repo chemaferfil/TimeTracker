@@ -222,42 +222,54 @@ def toggle_user_active(user_id):
     return redirect(url_for("admin.manage_users"))
 
 # --------------------------------------------------------------------
-#  REGISTROS (¡MODIFICADO!)
+#  REGISTROS 
 # --------------------------------------------------------------------
 @admin_bp.route("/records")
 @admin_required
 def manage_records():
+    # Página actual (semana): 1 = esta semana, 2 = anterior, etc.
+    page = request.args.get("page", type=int, default=1)
+    today = date.today()
+    # Lunes de la semana actual
+    start_of_current = today - timedelta(days=today.weekday())
+    # Calcular la semana a mostrar según el número de página
+    week_offset = (page - 1) * 7
+    start_of_week = start_of_current - timedelta(days=week_offset)
+    end_of_week = start_of_week + timedelta(days=6)
+
+    # Buscar registros solo de esa semana
     recs = (
         TimeRecord.query
         .join(User, TimeRecord.user_id == User.id)
-        .filter(TimeRecord.check_out.isnot(None), User.is_admin == False)
+        .filter(
+            TimeRecord.date >= start_of_week,
+            TimeRecord.date <= end_of_week,
+            User.is_admin == False,
+            TimeRecord.check_out.isnot(None)
+        )
         .order_by(TimeRecord.user_id, TimeRecord.date.asc(), TimeRecord.check_in.asc())
         .all()
     )
 
+    # Lógica de acumulados (igual que antes)
     weekly_acc = {}
     enriched = []
     for rec in recs:
         uid = rec.user_id
-
-        # El lunes de la semana correspondiente
+        # Lunes de la semana correspondiente
         sow = rec.date - timedelta(days=rec.date.weekday())
         sow_str = sow.strftime('%Y-%m-%d')
-        wh_secs = rec.user.weekly_hours * 3600
+        wh_secs = rec.user.weekly_hours * 3600 if rec.user.weekly_hours else 0
 
-        # Inicializa el acumulado de la semana si no existe
         if uid not in weekly_acc:
             weekly_acc[uid] = {}
         if sow_str not in weekly_acc[uid]:
             weekly_acc[uid][sow_str] = 0
 
-        # Duración del registro
         dur = rec.check_out - rec.check_in if rec.check_in and rec.check_out else None
         secs = dur.total_seconds() if dur else 0
 
-        # Suma a esa semana
         weekly_acc[uid][sow_str] += secs
-
         curr_week_total = weekly_acc[uid][sow_str]
         rem = wh_secs - curr_week_total
 
@@ -268,12 +280,22 @@ def manage_records():
             "is_over": rem < 0
         })
 
-    enriched = enriched[::-1]  # Más recientes primero
-    return render_template("manage_records.html", records=enriched)
+    # ¿Hay una semana anterior en la base de datos?
+    earliest_record = TimeRecord.query.order_by(TimeRecord.date.asc()).first()
+    has_next = False
+    if earliest_record:
+        first_week = earliest_record.date - timedelta(days=earliest_record.date.weekday())
+        has_next = start_of_week > first_week
 
-# --------------------------------------------------------------------
-#  EL RESTO DEL CÓDIGO SIGUE IGUAL...
-# --------------------------------------------------------------------
+    # Mostramos la semana más reciente primero
+    enriched = enriched[::-1]
+
+    return render_template(
+        "manage_records.html",
+        records=enriched,
+        page=page,
+        has_next=has_next
+    )
 
 @admin_bp.route("/records/edit/<int:record_id>", methods=["GET", "POST"])
 @admin_required
@@ -314,7 +336,7 @@ def delete_record(record_id):
     return redirect(url_for("admin.manage_records"))
 
 # --------------------------------------------------------------------
-#  CALENDARIO GLOBAL + API
+#  CALENDARIO GLOBAL + API 
 # --------------------------------------------------------------------
 @admin_bp.route("/calendar")
 @admin_required
@@ -330,14 +352,34 @@ def api_events():
     end     = request.args.get("end")
     status  = request.args.get("status")
 
+    # ==== Cambios para manejo correcto de fechas ====
+    start_date = None
+    end_date = None
+    if start:
+        try:
+            if 'T' in start:
+                start_date = datetime.fromisoformat(start.replace('Z', '')).date()
+            else:
+                start_date = datetime.strptime(start, "%Y-%m-%d").date()
+        except Exception:
+            start_date = None
+    if end:
+        try:
+            if 'T' in end:
+                end_date = datetime.fromisoformat(end.replace('Z', '')).date()
+            else:
+                end_date = datetime.strptime(end, "%Y-%m-%d").date()
+        except Exception:
+            end_date = None
+
     q = EmployeeStatus.query.join(User).filter(User.is_admin == False)
 
     if user_id:
         q = q.filter(EmployeeStatus.user_id == user_id)
-    if start:
-        q = q.filter(EmployeeStatus.date >= start)
-    if end:
-        q = q.filter(EmployeeStatus.date <= end)
+    if start_date:
+        q = q.filter(EmployeeStatus.date >= start_date)
+    if end_date:
+        q = q.filter(EmployeeStatus.date <= end_date)
     if status:
         q = q.filter(EmployeeStatus.status == status)
 
@@ -353,7 +395,9 @@ def api_events():
                 "Vacaciones": "#34d399"
             }.get(es.status, "#9ca3af"),
             "extendedProps": {
-                "notes": es.notes
+                "notes": es.notes,
+                "username": es.user.full_name or es.user.username,
+                "category": es.user.categoria
             },
             "allDay": True
         }
@@ -375,7 +419,7 @@ def api_employees():
     ])
 
 # --------------------------------------------------------------------
-#  FICHA INDIVIDUAL (rangos de fechas)
+#  FICHA INDIVIDUAL (rangos fechas)
 # --------------------------------------------------------------------
 @admin_bp.route("/employees/<int:user_id>/status", methods=["GET", "POST"])
 @admin_required

@@ -1,71 +1,141 @@
 {% extends "base.html" %}
 {% block title %}Exportar a Excel - Admin{% endblock %}
+{% block header %}<span class="text-miss-sushi-pink">Exportar Registros a Excel</span>{% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8">
-    <h2 class="text-3xl font-bold text-gray-200 mb-6">Exportar Registros a Excel</h2>
-
-    <div class="bg-gray-900 shadow-md rounded-lg p-6">
-        <form method="POST" action="{{ url_for('export.export_excel') }}">
-            <!-- FILA: Usuario, Categoría, Jornada semanal -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <div>
-                    <label for="user_id" class="block text-gray-400 text-sm font-bold mb-2">Usuario:</label>
-                    <select id="user_id" name="user_id" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
-                        <option value="">Todos</option>
-                        {% for user in users %}
-                        <option value="{{ user.id }}">{{ user.username }} ({{ user.full_name }})</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label for="categoria" class="block text-gray-400 text-sm font-bold mb-2">Categoría:</label>
-                    <select id="categoria" name="categoria" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
-                        <option value="">Todas</option>
-                        <option value="Cocina">Cocina</option>
-                        <option value="Sala">Sala</option>
-                        <option value="Reparto">Reparto</option>
-                        <option value="Delivery">Delivery</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="jornada" class="block text-gray-400 text-sm font-bold mb-2">Jornada semanal (horas):</label>
-                    <input type="number" id="jornada" name="jornada" min="0"
-                           class="shadow appearance-auto border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500"
-                           placeholder="Ej: 40">
-                </div>
+<section class="bg-gray-900 shadow-md rounded-lg p-6 mb-8">
+    <form method="POST" action="{{ url_for('export.export_excel') }}">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- FILTRO: Usuario -->
+            <div class="text-center">
+                <label for="user_id" class="block text-gray-400 text-sm font-bold mb-2">Usuario</label>
+                <select id="user_id" name="user_id" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
+                    <option value="">Todos</option>
+                    {% for user in users %}
+                    <option value="{{ user.id }}">{{ user.username }} ({{ user.full_name }})</option>
+                    {% endfor %}
+                </select>
+                <button name="filtro_usuario" value="1"
+                        class="mt-2 px-4 py-1 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none focus:shadow-outline cursor-pointer font-semibold"
+                        style="display: inline-block; min-width: 0; margin-top: 10px;">
+                    Excel por usuario
+                </button>
             </div>
+            <!-- FILTRO: Categoría -->
+            <div class="text-center">
+                <label for="categoria" class="block text-gray-400 text-sm font-bold mb-2">Categoría</label>
+                <select id="categoria" name="categoria" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
+                    <option value="">Todas</option>
+                    <option value="Cocina">Cocina</option>
+                    <option value="Sala">Sala</option>
+                    <option value="Reparto">Reparto</option>
+                    <option value="Delivery">Delivery</option>
+                </select>
+                <button name="filtro_categoria" value="1"
+                        class="mt-2 px-4 py-1 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none focus:shadow-outline cursor-pointer font-semibold"
+                        style="display: inline-block; min-width: 0; margin-top: 10px;">
+                    Excel por categoría
+                </button>
+            </div>
+            <!-- FILTRO: Jornada semanal -->
+            <div class="text-center">
+                <label for="jornada" class="block text-gray-400 text-sm font-bold mb-2">Jornada semanal (horas)</label>
+                <input type="number" id="jornada" name="jornada" min="0"
+                       class="shadow appearance-auto border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500"
+                       placeholder="Ej: 40">
+                <button name="filtro_jornada" value="1"
+                        class="mt-2 px-4 py-1 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none focus:shadow-outline cursor-pointer font-semibold"
+                        style="display: inline-block; min-width: 0; margin-top: 10px;">
+                    Excel por jornada
+                </button>
+            </div>
+        </div>
+        <!-- FILTRO: Fechas -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-end mb-8">
+            <div>
+                <label for="start_date" class="block text-gray-400 text-sm font-bold mb-2">Fecha de Inicio</label>
+                <input type="date" id="start_date" name="start_date"
+                       class="shadow appearance-auto border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
+            </div>
+            <div>
+                <label for="end_date" class="block text-gray-400 text-sm font-bold mb-2">Fecha de Fin</label>
+                <input type="date" id="end_date" name="end_date"
+                       class="shadow appearance-auto border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
+            </div>
+        </div>
+        <!-- Botones de descarga SOLO DOS, CENTRADOS -->
+        <div class="flex flex-col md:flex-row justify-center items-center gap-4">
+            <a href="{{ url_for('export.export_excel_daily') }}?fecha={{ today }}"
+               class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow text-center block">
+               Descargar Excel Diario
+            </a>
+            <a href="{{ url_for('export.export_pdf_daily') }}?fecha={{ today }}"
+               class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow text-center block">
+               Descargar PDF Diario
+            </a>
+        </div>
 
-            <!-- FILA: Fechas y botones -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 items-end mb-4">
-                <div>
-                    <label for="start_date" class="block text-gray-400 text-sm font-bold mb-2">Fecha de Inicio:</label>
-                    <input type="date" id="start_date" name="start_date"
-                           class="shadow appearance-auto border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
-                </div>
-                <div>
-                    <label for="end_date" class="block text-gray-400 text-sm font-bold mb-2">Fecha de Fin:</label>
-                    <input type="date" id="end_date" name="end_date"
-                           class="shadow appearance-auto border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
-                </div>
-                <div>
-                    <button type="submit"
-                        class="bg-fuchsia-800 hover:bg-fuchsia-700 text-white font-bold py-2 px-4 rounded w-full focus:outline-none focus:shadow-outline cursor-pointer mt-6">
-                        Descargar Excel
+        <!-- MODAL para advertencia de fechas -->
+        <div id="dateModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 hidden">
+            <div class="bg-gray-900 rounded-lg shadow-lg p-6 w-full max-w-md text-center">
+                <h3 class="text-lg font-bold mb-2 text-gray-100">Descarga de Excel</h3>
+                <p class="text-gray-200 mb-4">
+                    No se han seleccionado fechas. ¿Desea continuar con la descarga solo para el día de hoy,<br>
+                    o prefiere modificar las fechas antes de proceder?
+                </p>
+                <div class="flex justify-center gap-4">
+                    <button id="modalAcceptBtn" type="button"
+                        class="bg-fuchsia-700 hover:bg-fuchsia-800 text-white font-bold py-2 px-6 rounded shadow">
+                        Descargar solo hoy
+                    </button>
+                    <button id="modalEditBtn" type="button"
+                        class="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2 px-6 rounded shadow">
+                        Modificar fechas
                     </button>
                 </div>
-                <div class="flex gap-2 mt-6">
-                    <a href="{{ url_for('export.export_excel_daily') }}?fecha={{ today }}"
-                       class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow w-full text-center">
-                       Descargar Excel Diario
-                    </a>
-                    <a href="{{ url_for('export.export_pdf_daily') }}?fecha={{ today }}"
-                       class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow w-full text-center">
-                       Descargar PDF Diario
-                    </a>
-                </div>
             </div>
-        </form>
-    </div>
-</div>
+        </div>
+    </form>
+</section>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const start = document.getElementById('start_date');
+    const end = document.getElementById('end_date');
+    const dateModal = document.getElementById('dateModal');
+    const modalAcceptBtn = document.getElementById('modalAcceptBtn');
+    const modalEditBtn = document.getElementById('modalEditBtn');
+
+    // Detecta si es un botón de filtro general (excel por usuario, categoría o jornada)
+    form.addEventListener('submit', function(e) {
+        const filtro = e.submitter && (
+            e.submitter.name === 'filtro_usuario' ||
+            e.submitter.name === 'filtro_categoria' ||
+            e.submitter.name === 'filtro_jornada'
+        );
+        if (filtro && !start.value && !end.value) {
+            e.preventDefault();
+            dateModal.classList.remove('hidden');
+            // Al pulsar "Descargar solo hoy"
+            modalAcceptBtn.onclick = function() {
+                dateModal.classList.add('hidden');
+                // Añadir la fecha de hoy a los inputs antes de enviar el form
+                const today = new Date();
+                const yyyy = today.getFullYear();
+                const mm = String(today.getMonth() + 1).padStart(2, '0');
+                const dd = String(today.getDate()).padStart(2, '0');
+                const todayStr = `${yyyy}-${mm}-${dd}`;
+                start.value = todayStr;
+                end.value = todayStr;
+                form.submit();
+            };
+            // Al pulsar "Modificar fechas"
+            modalEditBtn.onclick = function() {
+                dateModal.classList.add('hidden');
+            };
+        }
+    });
+});
+</script>
 {% endblock %}

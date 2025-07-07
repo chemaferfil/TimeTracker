@@ -6,31 +6,31 @@
 <section class="bg-gray-800 p-6 rounded shadow mt-6">
   <h2 class="text-lg font-bold text-white mb-4">Fichajes abiertos</h2>
   {% if open_records %}
-  <table class="min-w-full text-white mb-4">
+    <table class="min-w-full text-white mb-4">
     <thead>
       <tr>
-        <th class="px-4 py-2">Usuario</th>
-        <th class="px-4 py-2">Fecha</th>
-        <th class="px-4 py-2">Entrada</th>
-        <th class="px-4 py-2">Cerrar con hora...</th>
-        <th class="px-4 py-2"></th>
+        <th class="px-4 py-2 text-center">Usuario</th>
+        <th class="px-4 py-2 text-center">Fecha</th>
+        <th class="px-4 py-2 text-center">Entrada</th>
+        <th class="px-4 py-2 text-center">Cerrar con hora...</th>
+        <th class="px-4 py-2 text-center"></th>
       </tr>
     </thead>
     <tbody>
       {% for r in open_records %}
       <tr>
-        <td class="px-4 py-2">{{ r.user.full_name or r.user.username }}</td>
-        <td class="px-4 py-2">{{ r.date }}</td>
-        <td class="px-4 py-2">{{ r.check_in.strftime('%H:%M') }}</td>
-        <td class="px-4 py-2">
-          <form method="POST" class="flex gap-2 items-center">
+        <td class="px-4 py-2 text-center">{{ r.user.full_name or r.user.username }}</td>
+        <td class="px-4 py-2 text-center">{{ r.date }}</td>
+        <td class="px-4 py-2 text-center">{{ r.check_in.strftime('%H:%M') }}</td>
+        <td class="px-4 py-2 text-center">
+          <form method="POST" class="flex gap-2 items-center justify-center">
             <input type="hidden" name="record_id" value="{{ r.id }}">
-            <input type="datetime-local" name="close_time" required
+            <input type="datetime-local" name="close_time" required class="text-black"
                    value="{{ r.check_in.strftime('%Y-%m-%dT%H:%M') }}">
             <button class="bg-fuchsia-700 text-white rounded px-2 py-1 text-sm hover:bg-fuchsia-800">Cerrar</button>
           </form>
         </td>
-        <td>
+        <td class="px-4 py-2 text-center">
           <small class="text-yellow-400">Sin salida</small>
         </td>
       </tr>

@@ -1,93 +1,91 @@
 {% extends "base.html" %}
-
 {% block title %}Gestionar Registros - Admin{% endblock %}
+{% block header %}<span class="text-miss-sushi-pink">Gestionar Registros de Fichaje</span>{% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4 py-8">
-    <div class="flex justify-between items-center mb-6">
-        <h2 class="text-3xl font-bold text-gray-200">Gestionar Registros de Fichaje</h2>
-    </div>
+<section class="bg-gray-900 shadow-md rounded-lg p-6 mb-8">
+  <!-- Paginación por semanas -->
+  <div class="flex gap-2 mb-6">
+    {% if page > 1 %}
+      <a href="{{ url_for('admin.manage_records', page=page-1) }}"
+         class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana anterior</a>
+    {% endif %}
+    <span class="px-4 py-2 bg-gray-700 text-gray-300 rounded">Semana {{ page }}</span>
+    {% if has_next %}
+      <a href="{{ url_for('admin.manage_records', page=page+1) }}"
+         class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana siguiente</a>
+    {% endif %}
+  </div>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="p-4 mb-4 text-sm rounded-lg 
-                    {% if category == 'success' %} bg-green-900 text-green-300
-                    {% elif category == 'danger' %} bg-red-900 text-red-300
-                    {% elif category == 'info' %} bg-blue-900 text-blue-300
-                    {% else %} bg-gray-800 text-gray-300
-                    {% endif %}" role="alert">
-                    {{ message }}
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="p-4 mb-4 text-sm rounded-lg 
+          {% if category == 'success' %} bg-green-900 text-green-300
+          {% elif category == 'danger' %} bg-red-900 text-red-300
+          {% elif category == 'info' %} bg-blue-900 text-blue-300
+          {% else %} bg-gray-800 text-gray-300
+          {% endif %}" role="alert">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
 
-    <div class="bg-gray-900 shadow-md rounded-lg overflow-hidden">
-        <table class="min-w-full leading-normal">
-            <thead>
-    <tr class="bg-gray-800 text-left text-gray-400 uppercase text-sm">
-        <th class="px-5 py-3 border-b-2 border-gray-700">Usuario</th>
-        <th class="px-5 py-3 border-b-2 border-gray-700">Fecha</th>
-        <th class="px-5 py-3 border-b-2 border-gray-700">Entrada</th>
-        <th class="px-5 py-3 border-b-2 border-gray-700">Salida</th>
-        <th class="px-5 py-3 border-b-2 border-gray-700">Tiempo Trabajado</th>
-        <th class="px-5 py-3 border-b-2 border-gray-700">Horas Restantes</th>
-        <th class="px-5 py-3 border-b-2 border-gray-700">Categoría</th> <!-- NUEVO -->
-        <th class="px-5 py-3 border-b-2 border-gray-700">Notas</th>
-        <th class="px-5 py-3 border-b-2 border-gray-700">Última Modificación</th>
-        <th class="px-5 py-3 border-b-2 border-gray-700">Acciones</th>
-    </tr>
-</thead>
-<tbody class="text-gray-200">
-    {% for item in records %}
-    <tr class="border-b border-gray-700 hover:bg-gray-800">
-        <td class="px-5 py-4 whitespace-nowrap">{{ item.record.user.username }}</td>
-        <td class="px-5 py-4 whitespace-nowrap">{{ item.record.date.strftime("%d-%m-%Y") }}</td>
-        <td class="px-5 py-4 whitespace-nowrap">
-            {{ item.record.check_in.strftime("%H:%M:%S") if item.record.check_in else "-" }}
-        </td>
-        <td class="px-5 py-4 whitespace-nowrap">
-            {{ item.record.check_out.strftime("%H:%M:%S") if item.record.check_out else "-" }}
-        </td>
-        <td class="px-5 py-4 whitespace-nowrap">{{ item.duration_formatted }}</td>
-        <td class="px-5 py-4 whitespace-nowrap">
+  <div class="overflow-x-auto">
+    <table class="min-w-full leading-normal">
+      <thead>
+        <tr class="bg-gray-800 text-left text-gray-400 uppercase text-sm">
+          <th class="px-5 py-3 border-b border-gray-700">Usuario</th>
+          <th class="px-5 py-3 border-b border-gray-700">Fecha</th>
+          <th class="px-5 py-3 border-b border-gray-700">Entrada</th>
+          <th class="px-5 py-3 border-b border-gray-700">Salida</th>
+          <th class="px-5 py-3 border-b border-gray-700">Tiempo Trabajado</th>
+          <th class="px-5 py-3 border-b border-gray-700">Horas Restantes</th>
+          <th class="px-5 py-3 border-b border-gray-700">Categoría</th>
+          <th class="px-5 py-3 border-b border-gray-700">Notas</th>
+          <th class="px-5 py-3 border-b border-gray-700">Última Modificación</th>
+          <th class="px-5 py-3 border-b border-gray-700">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="text-gray-200">
+        {% for item in records %}
+        <tr class="border-b border-gray-700 hover:bg-gray-800">
+          <td class="px-5 py-4">{{ item.record.user.username }}</td>
+          <td class="px-5 py-4">{{ item.record.date.strftime("%d-%m-%Y") }}</td>
+          <td class="px-5 py-4">{{ item.record.check_in.strftime("%H:%M:%S") if item.record.check_in else '-' }}</td>
+          <td class="px-5 py-4">{{ item.record.check_out.strftime("%H:%M:%S") if item.record.check_out else '-' }}</td>
+          <td class="px-5 py-4">{{ item.duration_formatted }}</td>
+          <td class="px-5 py-4">
             {% if item.is_over %}
-                <span class="text-red-500">●</span> -{{ item.remaining }}
+              <span class="text-red-500">●</span> -{{ item.remaining }}
             {% else %}
-                <span class="text-green-500">●</span> {{ item.remaining }}
+              <span class="text-green-500">●</span> {{ item.remaining }}
             {% endif %}
-        </td>
-        <td class="px-5 py-4 whitespace-nowrap">
-            {{ item.record.user.categoria or '-' }}
-        </td>
-        <td class="px-5 py-4">{{ item.record.notes or "" }}</td>
-        <td class="px-5 py-4 whitespace-nowrap">
-            {{ item.record.updated_at.strftime("%d-%m-%Y %H:%M:%S") if item.record.updated_at else "-" }}
-        </td>
-        <td class="px-5 py-4 whitespace-nowrap space-x-2">
+          </td>
+          <td class="px-5 py-4">{{ item.record.user.categoria or '-' }}</td>
+          <td class="px-5 py-4">{{ item.record.notes or '' }}</td>
+          <td class="px-5 py-4">{{ item.record.updated_at.strftime("%d-%m-%Y %H:%M:%S") if item.record.updated_at else '-' }}</td>
+          <td class="px-5 py-4 space-x-2">
             <a href="{{ url_for('admin.edit_record', record_id=item.record.id) }}"
-               class="inline-block bg-fuchsia-800 hover:bg-fuchsia-700 text-white font-bold py-1 px-3 rounded text-xs">
-                Editar
-            </a>
-            <form action="{{ url_for('admin.delete_record', record_id=item.record.id) }}" method="POST" class="inline-block"
-                  onsubmit="return confirm('¿Estás seguro de que deseas eliminar este registro de fichaje?');">
-                <button type="submit"
-                        class="bg-red-800 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-xs transition-colors duration-300 ease-in-out">
-                    Eliminar
-                </button>
+               class="bg-fuchsia-800 hover:bg-fuchsia-700 text-white px-3 py-1 rounded text-xs">Editar</a>
+            <form action="{{ url_for('admin.delete_record', record_id=item.record.id) }}"
+                  method="POST" class="inline-block"
+                  onsubmit="return confirm('¿Seguro que deseas eliminar este registro?');">
+              <button type="submit"
+                      class="bg-red-800 hover:bg-red-700 text-white px-3 py-1 rounded text-xs">Eliminar</button>
             </form>
-        </td>
-    </tr>
-    {% else %}
-    <tr>
-        <td colspan="10" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="10" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">
             No hay registros para mostrar.
-        </td>
-    </tr>
-    {% endfor %}
-</tbody>
-        </table>
-    </div>
-</div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 {% endblock %}
