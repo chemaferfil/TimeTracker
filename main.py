@@ -6,12 +6,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from flask import Flask, render_template
 from models.database import db
-from flask_migrate import Migrate
+from flask_migrate import Migrate, upgrade as migrate_upgrade
 from routes.auth import auth_bp
 from routes.time import time_bp
 from routes.admin import admin_bp
 from routes.export import export_bp
 
+# Crear instancia de la app Flask
 app = Flask(
     __name__,
     static_folder='static',
@@ -47,9 +48,10 @@ app.register_blueprint(time_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(export_bp)
 
-# Crear tablas si no existen (útil para desarrollo rápido)
+# Ejecutar migraciones y crear tablas (solo en arranque)
 with app.app_context():
     from models.models import User, TimeRecord
+    migrate_upgrade()
     db.create_all()
 
 # Ruta de inicio
