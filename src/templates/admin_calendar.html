@@ -18,6 +18,19 @@
 
   <!-- ----------------  FILTROS  ---------------- -->
   <form id="calendar-filters" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-4">
+    <!-- Centro -->
+    <div>
+      <label for="centro" class="block text-sm mb-1">Centro</label>
+      <select id="centro" name="centro"
+              class="w-full px-2 py-1 rounded bg-gray-700 text-white">
+        <option value="">Todos</option>
+        <option value="Avenida de Brasil">Avenida de Brasil</option>
+        <option value="Hortaleza">Hortaleza</option>
+        <option value="Las Tablas">Las Tablas</option>
+        <option value="Majadahonda">Majadahonda</option>
+      </select>
+    </div>
+
     <!-- Usuario -->
     <div>
       <label for="user" class="block text-sm mb-1">Usuario</label>
@@ -88,17 +101,26 @@
 document.addEventListener('DOMContentLoaded', () => {
 
   /* ----------   1.  POBLAR SELECT DE EMPLEADOS   ---------- */
-  fetch('/admin/api/employees')
-    .then(r => r.json())
-    .then(list => {
-      const sel = document.getElementById('user');
-      list.forEach(u => {
-        const opt = document.createElement('option');
-        opt.value = u.id;
-        opt.textContent = u.full_name || u.username;
-        sel.appendChild(opt);
+  function loadEmployees(centro = '') {
+    const sel = document.getElementById('user');
+    sel.innerHTML = '<option value="">Todos</option>';
+    
+    const url = centro ? `/admin/api/employees?centro=${encodeURIComponent(centro)}` : '/admin/api/employees';
+    
+    fetch(url)
+      .then(r => r.json())
+      .then(list => {
+        list.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = u.full_name || u.username;
+          sel.appendChild(opt);
+        });
       });
-    });
+  }
+
+  // Cargar empleados inicialmente
+  loadEmployees();
 
   /* ----------   2.  FULLCALENDAR  ---------- */
   const calEl     = document.getElementById('employee-calendar');
@@ -150,9 +172,23 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     baseQuery = {
       user_id : form.user_id.value,
+      centro  : form.centro.value,
       start   : form.start.value,
       end     : form.end.value
     };
+    calendar.refetchEvents();
+    toggleFichaButton();
+  });
+
+  form.centro.addEventListener('change', () => {
+    baseQuery = {
+      user_id : '',
+      centro  : form.centro.value,
+      start   : form.start.value,
+      end     : form.end.value
+    };
+    form.user_id.value = '';
+    loadEmployees(form.centro.value);
     calendar.refetchEvents();
     toggleFichaButton();
   });
@@ -162,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
     form.reset();
     document.querySelectorAll('.status-filter').forEach(cb => cb.checked = true);
     activeStatuses = ['Trabajado', 'Baja', 'Ausente', 'Vacaciones'];
+    loadEmployees();
     calendar.refetchEvents();
     toggleFichaButton();
   };

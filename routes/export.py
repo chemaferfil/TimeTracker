@@ -37,6 +37,7 @@ def export_excel():
         end_date = request.form.get("end_date")
         user_id = request.form.get("user_id")
         categoria = request.form.get("categoria")
+        centro = request.form.get("centro")
         weekly_hours = request.form.get("weekly_hours") or request.form.get("jornada")
 
         # Validación fechas
@@ -67,6 +68,8 @@ def export_excel():
             query = query.filter(TimeRecord.user_id == user_id)
         if categoria:
             query = query.filter(User.categoria == categoria)
+        if centro:
+            query = query.filter(User.centro == centro)
         if weekly_hours:
             try:
                 wh = int(weekly_hours)
@@ -88,7 +91,7 @@ def export_excel():
         ws = wb.active
         ws.title = "Registros de Fichaje"
 
-        header = ["Usuario", "Nombre completo", "Categoría", "Fecha", "Entrada", "Salida", "Horas Trabajadas", "Notas", "Modificado Por", "Última Actualización"]
+        header = ["Usuario", "Nombre completo", "Categoría", "Centro", "Fecha", "Entrada", "Salida", "Horas Trabajadas", "Notas", "Modificado Por", "Última Actualización"]
         for col_num, header_text in enumerate(header, 1):
             cell = ws.cell(row=1, column=col_num)
             cell.value = header_text
@@ -111,13 +114,14 @@ def export_excel():
             ws.cell(row=row_num, column=1).value = user.username if user else f"ID: {record.user_id}"
             ws.cell(row=row_num, column=2).value = user.full_name if user else "-"
             ws.cell(row=row_num, column=3).value = user.categoria if user and user.categoria else "-"
-            ws.cell(row=row_num, column=4).value = record.date.strftime("%d/%m/%Y")
-            ws.cell(row=row_num, column=5).value = record.check_in.strftime("%H:%M:%S") if record.check_in else "-"
-            ws.cell(row=row_num, column=6).value = record.check_out.strftime("%H:%M:%S") if record.check_out else "-"
-            ws.cell(row=row_num, column=7).value = hours_worked
-            ws.cell(row=row_num, column=8).value = record.notes
-            ws.cell(row=row_num, column=9).value = modified_by.username if modified_by else "-"
-            ws.cell(row=row_num, column=10).value = record.updated_at.strftime("%d/%m/%Y %H:%M:%S")
+            ws.cell(row=row_num, column=4).value = user.centro if user and user.centro else "-"
+            ws.cell(row=row_num, column=5).value = record.date.strftime("%d/%m/%Y")
+            ws.cell(row=row_num, column=6).value = record.check_in.strftime("%H:%M:%S") if record.check_in else "-"
+            ws.cell(row=row_num, column=7).value = record.check_out.strftime("%H:%M:%S") if record.check_out else "-"
+            ws.cell(row=row_num, column=8).value = hours_worked
+            ws.cell(row=row_num, column=9).value = record.notes
+            ws.cell(row=row_num, column=10).value = modified_by.username if modified_by else "-"
+            ws.cell(row=row_num, column=11).value = record.updated_at.strftime("%d/%m/%Y %H:%M:%S")
             row_num += 1
 
         for col_num, _ in enumerate(header, 1):
@@ -161,7 +165,7 @@ def export_excel_daily():
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Registros diarios"
-    header = ["Usuario", "Nombre completo", "Categoría", "Fecha", "Entrada", "Salida", "Horas Trabajadas", "Notas"]
+    header = ["Usuario", "Nombre completo", "Categoría", "Centro", "Fecha", "Entrada", "Salida", "Horas Trabajadas", "Notas"]
     for col_num, header_text in enumerate(header, 1):
         cell = ws.cell(row=1, column=col_num)
         cell.value = header_text
@@ -180,11 +184,12 @@ def export_excel_daily():
         ws.cell(row=row_num, column=1).value = user.username if user else f"ID: {record.user_id}"
         ws.cell(row=row_num, column=2).value = user.full_name if user else "-"
         ws.cell(row=row_num, column=3).value = user.categoria if user and user.categoria else "-"
-        ws.cell(row=row_num, column=4).value = record.date.strftime("%d/%m/%Y")
-        ws.cell(row=row_num, column=5).value = record.check_in.strftime("%H:%M:%S") if record.check_in else "-"
-        ws.cell(row=row_num, column=6).value = record.check_out.strftime("%H:%M:%S") if record.check_out else "-"
-        ws.cell(row=row_num, column=7).value = hours_worked
-        ws.cell(row=row_num, column=8).value = record.notes
+        ws.cell(row=row_num, column=4).value = user.centro if user and user.centro else "-"
+        ws.cell(row=row_num, column=5).value = record.date.strftime("%d/%m/%Y")
+        ws.cell(row=row_num, column=6).value = record.check_in.strftime("%H:%M:%S") if record.check_in else "-"
+        ws.cell(row=row_num, column=7).value = record.check_out.strftime("%H:%M:%S") if record.check_out else "-"
+        ws.cell(row=row_num, column=8).value = hours_worked
+        ws.cell(row=row_num, column=9).value = record.notes
         row_num += 1
 
     for col_num, _ in enumerate(header, 1):
@@ -228,8 +233,8 @@ def export_pdf_daily():
     pdf.cell(0, 10, f"Registros de fichaje del {fecha.strftime('%d/%m/%Y')}", ln=1, align="C")
 
     pdf.set_font("Arial", "B", 10)
-    header = ["Usuario", "Nombre completo", "Categoría", "Entrada", "Salida", "Horas Trabajadas", "Notas"]
-    col_widths = [35, 45, 30, 25, 25, 35, 55]
+    header = ["Usuario", "Nombre completo", "Categoría", "Centro", "Entrada", "Salida", "Horas Trabajadas", "Notas"]
+    col_widths = [30, 40, 25, 30, 22, 22, 30, 55]
 
     for i, col_name in enumerate(header):
         pdf.cell(col_widths[i], 8, col_name, border=1, align="C")
@@ -248,6 +253,7 @@ def export_pdf_daily():
             user.username if user else f"ID: {record.user_id}",
             user.full_name if user else "-",
             user.categoria if user and user.categoria else "-",
+            user.centro if user and user.centro else "-",
             record.check_in.strftime("%H:%M:%S") if record.check_in else "-",
             record.check_out.strftime("%H:%M:%S") if record.check_out else "-",
             hours_worked,

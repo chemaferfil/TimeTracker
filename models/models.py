@@ -11,6 +11,13 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
     weekly_hours = db.Column(db.Integer, nullable=False, default=0)
+    centro = db.Column(
+        db.Enum(
+            "-- Sin categoría --", "Avenida de Brasil", "Hortaleza", "Las Tablas", "Majadahonda",
+            name="centro_enum"
+        ),
+        nullable=True
+    )
     categoria = db.Column(
         db.Enum(
             "Cocina", "Delivery", "Reparto", "Sala",

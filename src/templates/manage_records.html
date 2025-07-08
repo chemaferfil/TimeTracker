@@ -43,6 +43,7 @@
           <th class="px-5 py-3 border-b border-gray-700">Tiempo Trabajado</th>
           <th class="px-5 py-3 border-b border-gray-700">Horas Restantes</th>
           <th class="px-5 py-3 border-b border-gray-700">Categoría</th>
+          <th class="px-5 py-3 border-b border-gray-700">Centro</th>
           <th class="px-5 py-3 border-b border-gray-700">Notas</th>
           <th class="px-5 py-3 border-b border-gray-700">Última Modificación</th>
           <th class="px-5 py-3 border-b border-gray-700">Acciones</th>
@@ -64,6 +65,7 @@
             {% endif %}
           </td>
           <td class="px-5 py-4">{{ item.record.user.categoria or '-' }}</td>
+          <td class="px-5 py-4">{{ item.record.user.centro or '-' }}</td>
           <td class="px-5 py-4">{{ item.record.notes or '' }}</td>
           <td class="px-5 py-4">{{ item.record.updated_at.strftime("%d-%m-%Y %H:%M:%S") if item.record.updated_at else '-' }}</td>
           <td class="px-5 py-4 space-x-2">

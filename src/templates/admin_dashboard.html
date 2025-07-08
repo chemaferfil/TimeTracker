@@ -49,6 +49,7 @@
           <th class="px-5 py-3 border-b-2 border-gray-700">Tiempo Trabajado</th>
           <th class="px-5 py-3 border-b-2 border-gray-700">Horas Restantes</th>
           <th class="px-5 py-3 border-b-2 border-gray-700">Categoría</th>
+          <th class="px-5 py-3 border-b-2 border-gray-700">Centro</th>
           <th class="px-5 py-3 border-b-2 border-gray-700">Notas</th>
         </tr>
       </thead>
@@ -81,6 +82,9 @@
       </td>
       <td class="px-5 py-4 whitespace-nowrap">
         {{ item.record.user.categoria or '-' }}
+      </td>
+      <td class="px-5 py-4 whitespace-nowrap">
+        {{ item.record.user.centro or '-' }}
       </td>
       <td class="px-5 py-4">{{ item.record.notes or "" }}</td>
     </tr>

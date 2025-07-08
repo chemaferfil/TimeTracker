@@ -4,53 +4,136 @@
 
 {% block content %}
 <section class="bg-gray-900 shadow-md rounded-lg p-6 mb-8">
-    <form method="POST" action="{{ url_for('export.export_excel') }}">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <!-- FILTRO: Usuario -->
+    <!-- Globo 1: Filtros rápidos por ubicación -->
+    <div class="bg-gray-800 rounded-lg p-6 mb-8">
+        <!-- Fila 1: Centro + Usuario + Botón -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4 items-end">
             <div class="text-center">
-                <label for="user_id" class="block text-gray-400 text-sm font-bold mb-2">Usuario</label>
-                <select id="user_id" name="user_id" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
+                <label for="centro1" class="block text-gray-400 text-sm font-bold mb-2">Centro</label>
+                <select id="centro1" name="centro1" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
+                    <option value="">Todos</option>
+                    <option value="Avenida de Brasil">Avenida de Brasil</option>
+                    <option value="Hortaleza">Hortaleza</option>
+                    <option value="Las Tablas">Las Tablas</option>
+                    <option value="Majadahonda">Majadahonda</option>
+                </select>
+            </div>
+            <div class="text-center flex gap-2 items-end">
+                <div class="w-full">
+                    <label for="usuario1" class="block text-gray-400 text-sm font-bold mb-2">Usuario</label>
+                    <select id="usuario1" name="usuario1" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <button name="excel_centro_usuario" value="1"
+                        class="h-10 min-w-[260px] px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
+                    Excel por Ubicación + Usuario
+                </button>
+            </div>
+        </div>
+        <!-- Fila 2: Centro + Categoría + Botón -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4 items-end">
+            <div class="text-center">
+                <label for="centro2" class="block text-gray-400 text-sm font-bold mb-2">Centro</label>
+                <select id="centro2" name="centro2" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
+                    <option value="">Todos</option>
+                    <option value="Avenida de Brasil">Avenida de Brasil</option>
+                    <option value="Hortaleza">Hortaleza</option>
+                    <option value="Las Tablas">Las Tablas</option>
+                    <option value="Majadahonda">Majadahonda</option>
+                </select>
+            </div>
+            <div class="text-center flex gap-2 items-end">
+                <div class="w-full">
+                    <label for="categoria2" class="block text-gray-400 text-sm font-bold mb-2">Categoría</label>
+                    <select id="categoria2" name="categoria2" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <button name="excel_centro_categoria" value="1"
+                        class="h-10 min-w-[260px] px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
+                    Excel por Ubicación + Categoría
+                </button>
+            </div>
+        </div>
+        <!-- Fila 3: Centro + Horas + Botón -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4 items-end">
+            <div class="text-center">
+                <label for="centro3" class="block text-gray-400 text-sm font-bold mb-2">Centro</label>
+                <select id="centro3" name="centro3" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
+                    <option value="">Todos</option>
+                    <option value="Avenida de Brasil">Avenida de Brasil</option>
+                    <option value="Hortaleza">Hortaleza</option>
+                    <option value="Las Tablas">Las Tablas</option>
+                    <option value="Majadahonda">Majadahonda</option>
+                </select>
+            </div>
+            <div class="text-center flex gap-2 items-end">
+                <div class="w-full">
+                    <label for="horas3" class="block text-gray-400 text-sm font-bold mb-2">Horas de trabajo</label>
+                    <select id="horas3" name="horas3" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <button name="excel_centro_horas" value="1"
+                        class="h-10 min-w-[260px] px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
+                    Excel por Ubicación + Horas
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- Globo 2: Filtros avanzados y descargas diarias -->
+    <div class="bg-gray-800 rounded-lg p-6 mb-8">
+        <!-- Fila 4: Todos los filtros -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-4">
+            <div class="text-center">
+                <label for="centro4" class="block text-gray-400 text-sm font-bold mb-2">Centro</label>
+                <select id="centro4" name="centro4" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
+                    <option value="">Todos</option>
+                    <option value="Avenida de Brasil">Avenida de Brasil</option>
+                    <option value="Hortaleza">Hortaleza</option>
+                    <option value="Las Tablas">Las Tablas</option>
+                    <option value="Majadahonda">Majadahonda</option>
+                </select>
+            </div>
+            <div class="text-center">
+                <label for="usuario4" class="block text-gray-400 text-sm font-bold mb-2">Usuario</label>
+                <select id="usuario4" name="usuario4" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
                     <option value="">Todos</option>
                     {% for user in users %}
                     <option value="{{ user.id }}">{{ user.username }} ({{ user.full_name }})</option>
                     {% endfor %}
                 </select>
-                <button name="filtro_usuario" value="1"
-                        class="mt-2 px-4 py-1 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none focus:shadow-outline cursor-pointer font-semibold"
-                        style="display: inline-block; min-width: 0; margin-top: 10px;">
-                    Excel por usuario
-                </button>
             </div>
-            <!-- FILTRO: Categoría -->
             <div class="text-center">
-                <label for="categoria" class="block text-gray-400 text-sm font-bold mb-2">Categoría</label>
-                <select id="categoria" name="categoria" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500">
+                <label for="categoria4" class="block text-gray-400 text-sm font-bold mb-2">Categoría</label>
+                <select id="categoria4" name="categoria4" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
                     <option value="">Todas</option>
                     <option value="Cocina">Cocina</option>
                     <option value="Sala">Sala</option>
                     <option value="Reparto">Reparto</option>
                     <option value="Delivery">Delivery</option>
                 </select>
-                <button name="filtro_categoria" value="1"
-                        class="mt-2 px-4 py-1 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none focus:shadow-outline cursor-pointer font-semibold"
-                        style="display: inline-block; min-width: 0; margin-top: 10px;">
-                    Excel por categoría
-                </button>
             </div>
-            <!-- FILTRO: Jornada semanal -->
             <div class="text-center">
-                <label for="jornada" class="block text-gray-400 text-sm font-bold mb-2">Jornada semanal (horas)</label>
-                <input type="number" id="jornada" name="jornada" min="0"
-                       class="shadow appearance-auto border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300 leading-tight focus:outline-none focus:shadow-outline focus:border-fuchsia-500"
-                       placeholder="Ej: 40">
-                <button name="filtro_jornada" value="1"
-                        class="mt-2 px-4 py-1 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none focus:shadow-outline cursor-pointer font-semibold"
-                        style="display: inline-block; min-width: 0; margin-top: 10px;">
-                    Excel por jornada
-                </button>
+                <label for="horas4" class="block text-gray-400 text-sm font-bold mb-2">Horas de trabajo</label>
+                <select id="horas4" name="horas4" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
+                    <option value="">Todas</option>
+                    {% for user in users %}
+                        {% if user.weekly_hours %}
+                            <option value="{{ user.weekly_hours }}">{{ user.weekly_hours }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
             </div>
         </div>
-        <!-- FILTRO: Fechas -->
+        <div class="flex justify-center mb-8">
+            <button name="excel_todos" value="1"
+                    class="px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
+                Excel con todos los filtros
+            </button>
+        </div>
+        <!-- Fila 5: Fechas -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-end mb-8">
             <div>
                 <label for="start_date" class="block text-gray-400 text-sm font-bold mb-2">Fecha de Inicio</label>
@@ -107,12 +190,67 @@ document.addEventListener('DOMContentLoaded', function() {
     const modalAcceptBtn = document.getElementById('modalAcceptBtn');
     const modalEditBtn = document.getElementById('modalEditBtn');
 
-    // Detecta si es un botón de filtro general (excel por usuario, categoría o jornada)
+    // --- Fila 1: Centro + Usuario ---
+    const centro1 = document.getElementById('centro1');
+    const usuario1 = document.getElementById('usuario1');
+    centro1.addEventListener('change', function() {
+        usuario1.innerHTML = '<option value="">Todos</option>';
+        if (!centro1.value) return;
+        fetch(`/admin/api/centro_info?centro=${encodeURIComponent(centro1.value)}`)
+            .then(r => r.json())
+            .then(data => {
+                data.usuarios.forEach(u => {
+                    const opt = document.createElement('option');
+                    opt.value = u.id;
+                    opt.textContent = u.username + ' (' + u.full_name + ')';
+                    usuario1.appendChild(opt);
+                });
+            });
+    });
+
+    // --- Fila 2: Centro + Categoría ---
+    const centro2 = document.getElementById('centro2');
+    const categoria2 = document.getElementById('categoria2');
+    centro2.addEventListener('change', function() {
+        categoria2.innerHTML = '<option value="">Todas</option>';
+        if (!centro2.value) return;
+        fetch(`/admin/api/centro_info?centro=${encodeURIComponent(centro2.value)}`)
+            .then(r => r.json())
+            .then(data => {
+                data.categorias.forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.textContent = cat;
+                    categoria2.appendChild(opt);
+                });
+            });
+    });
+
+    // --- Fila 3: Centro + Horas ---
+    const centro3 = document.getElementById('centro3');
+    const horas3 = document.getElementById('horas3');
+    centro3.addEventListener('change', function() {
+        horas3.innerHTML = '<option value="">Todas</option>';
+        if (!centro3.value) return;
+        fetch(`/admin/api/centro_info?centro=${encodeURIComponent(centro3.value)}`)
+            .then(r => r.json())
+            .then(data => {
+                data.horas.forEach(h => {
+                    const opt = document.createElement('option');
+                    opt.value = h;
+                    opt.textContent = h;
+                    horas3.appendChild(opt);
+                });
+            });
+    });
+
+    // --- Modal fechas para todos los botones de Excel ---
     form.addEventListener('submit', function(e) {
         const filtro = e.submitter && (
-            e.submitter.name === 'filtro_usuario' ||
-            e.submitter.name === 'filtro_categoria' ||
-            e.submitter.name === 'filtro_jornada'
+            e.submitter.name === 'excel_centro_usuario' ||
+            e.submitter.name === 'excel_centro_categoria' ||
+            e.submitter.name === 'excel_centro_horas' ||
+            e.submitter.name === 'excel_todos'
         );
         if (filtro && !start.value && !end.value) {
             e.preventDefault();

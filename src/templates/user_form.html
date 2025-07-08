@@ -83,6 +83,36 @@
                    class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink">
         </div>
 
+        <!-- Centro -->
+        <div class="mb-4">
+            <label for="centro" class="block text-sm font-medium text-gray-300 mb-1">
+                Centro
+            </label>
+            <select id="centro" name="centro"
+                    class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink">
+                <option value="-- Sin categoría --"
+                    {% if (form_data and form_data.get('centro') == '-- Sin categoría --') or (user and user.centro == '-- Sin categoría --') %}selected{% endif %}>
+                    -- Sin categoría --
+                </option>
+                <option value="Avenida de Brasil"
+                    {% if (form_data and form_data.get('centro') == 'Avenida de Brasil') or (user and user.centro == 'Avenida de Brasil') %}selected{% endif %}>
+                    Avenida de Brasil
+                </option>
+                <option value="Hortaleza"
+                    {% if (form_data and form_data.get('centro') == 'Hortaleza') or (user and user.centro == 'Hortaleza') %}selected{% endif %}>
+                    Hortaleza
+                </option>
+                <option value="Las Tablas"
+                    {% if (form_data and form_data.get('centro') == 'Las Tablas') or (user and user.centro == 'Las Tablas') %}selected{% endif %}>
+                    Las Tablas
+                </option>
+                <option value="Majadahonda"
+                    {% if (form_data and form_data.get('centro') == 'Majadahonda') or (user and user.centro == 'Majadahonda') %}selected{% endif %}>
+                    Majadahonda
+                </option>
+            </select>
+        </div>
+
         <!-- Categoria -->
         <div class="mb-4">
             <label for="categoria" class="block text-sm font-medium text-gray-300 mb-1">

@@ -55,7 +55,9 @@
   </form>
 
   <!-- ----------  CALENDARIO PERSONAL  ---------- -->
-  <div id="user-calendar"></div>
+  <div class="w-full max-w-6xl mx-auto">
+    <div id="user-calendar"></div>
+  </div>
 
   <!-- ----------  MODAL DE EDICIÓN  ---------- -->
   <div id="editModal" class="fixed inset-0 z-50 flex items-center justify-center hidden" style="background:rgba(0,0,0,0.5);">
@@ -101,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
     firstDay    : 1,
     locale      : 'es',
     height      : 'auto',
+    dayMaxEvents: 3,
     eventDisplay: 'block',
 
     events(info, success, fail) {

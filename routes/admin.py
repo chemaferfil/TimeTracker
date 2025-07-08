@@ -115,6 +115,7 @@ def add_user():
         email         = request.form.get("email")
         is_admin      = request.form.get("is_admin") == "on"
         weekly_hours  = request.form.get("weekly_hours", type=int)
+        centro        = request.form.get("centro") or None
         categoria     = request.form.get("categoria") or None
 
         if not all([username, password, full_name, email]) or weekly_hours is None:
@@ -134,6 +135,7 @@ def add_user():
             is_admin      = is_admin,
             is_active     = True,
             weekly_hours  = weekly_hours,
+            centro        = centro,
             categoria     = categoria
         )
         new_user.set_password(password)
@@ -178,6 +180,7 @@ def edit_user(user_id):
         user.email         = new_email
         user.full_name     = request.form.get("full_name")
         user.weekly_hours  = request.form.get("weekly_hours", type=int)
+        user.centro        = request.form.get("centro") or None
         user.categoria     = request.form.get("categoria") or None
 
         if user.id != session.get("user_id"):
@@ -351,6 +354,7 @@ def api_events():
     start   = request.args.get("start")
     end     = request.args.get("end")
     status  = request.args.get("status")
+    centro  = request.args.get("centro")
 
     # ==== Cambios para manejo correcto de fechas ====
     start_date = None
@@ -382,6 +386,8 @@ def api_events():
         q = q.filter(EmployeeStatus.date <= end_date)
     if status:
         q = q.filter(EmployeeStatus.status == status)
+    if centro:
+        q = q.filter(User.centro == centro)
 
     events = [
         {
@@ -408,15 +414,33 @@ def api_events():
 @admin_bp.route("/api/employees")
 @admin_required
 def api_employees():
-    employees = (
-        User.query.filter_by(is_admin=False)
-        .order_by(User.full_name)
-        .all()
-    )
+    centro = request.args.get("centro")
+    query = User.query.filter_by(is_admin=False)
+    
+    if centro:
+        query = query.filter(User.centro == centro)
+    
+    employees = query.order_by(User.full_name).all()
     return jsonify([
         {"id": u.id, "username": u.username, "full_name": u.full_name}
         for u in employees
     ])
+
+@admin_bp.route("/api/centro_info")
+@admin_required
+def api_centro_info():
+    centro = request.args.get("centro")
+    users = User.query.filter_by(is_admin=False)
+    if centro:
+        users = users.filter(User.centro == centro)
+    users = users.all()
+    categorias = sorted(set(u.categoria for u in users if u.categoria))
+    horas = sorted(set(u.weekly_hours for u in users if u.weekly_hours is not None))
+    return jsonify({
+        "usuarios": [{"id": u.id, "username": u.username, "full_name": u.full_name} for u in users],
+        "categorias": categorias,
+        "horas": horas
+    })
 
 # --------------------------------------------------------------------
 #  FICHA INDIVIDUAL (rangos fechas)
