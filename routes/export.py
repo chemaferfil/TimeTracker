@@ -39,13 +39,18 @@ def export_excel():
             user_id = request.form.get("usuario1")
             categoria = None
             weekly_hours = None
-        elif "excel_centro_categoria" in request.form:
-            centro = request.form.get("centro2")
+        elif "excel_usuario" in request.form:
+            centro = None
+            user_id = request.form.get("usuario1")
+            categoria = None
+            weekly_hours = None
+        elif "excel_categoria" in request.form:
+            centro = None
             user_id = None
             categoria = request.form.get("categoria2")
             weekly_hours = None
-        elif "excel_centro_horas" in request.form:
-            centro = request.form.get("centro3")
+        elif "excel_horas" in request.form:
+            centro = None
             user_id = None
             categoria = None
             weekly_hours = request.form.get("horas3")
@@ -53,6 +58,26 @@ def export_excel():
             centro = request.form.get("centro4")
             user_id = request.form.get("usuario4")
             categoria = request.form.get("categoria4")
+            weekly_hours = request.form.get("horas4")
+        elif "excel_solo_centro" in request.form:
+            centro = request.form.get("centro4")
+            user_id = None
+            categoria = None
+            weekly_hours = None
+        elif "excel_solo_usuario" in request.form:
+            centro = None
+            user_id = request.form.get("usuario4")
+            categoria = None
+            weekly_hours = None
+        elif "excel_solo_categoria" in request.form:
+            centro = None
+            user_id = None
+            categoria = request.form.get("categoria4")
+            weekly_hours = None
+        elif "excel_solo_horas" in request.form:
+            centro = None
+            user_id = None
+            categoria = None
             weekly_hours = request.form.get("horas4")
         else:
             # Compatibilidad con los filtros antiguos
@@ -96,7 +121,8 @@ def export_excel():
         if weekly_hours:
             try:
                 wh = int(weekly_hours)
-                query = query.filter(User.weekly_hours == wh)
+                query = query.filter(User.weekly_hours.isnot(None))
+                query = query.filter(db.cast(User.weekly_hours, db.Integer) == wh)
             except ValueError:
                 flash("La jornada debe ser numérica.", "danger")
                 return redirect(url_for("export.export_excel"))
