@@ -259,16 +259,21 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // --- Modal fechas para todos los botones de Excel ---
+    let lastSubmitter = null;
     form.addEventListener('submit', function(e) {
-        const filtro = e.submitter && (
-            e.submitter.name === 'excel_centro_usuario' ||
-            e.submitter.name === 'excel_centro_categoria' ||
-            e.submitter.name === 'excel_centro_horas' ||
-            e.submitter.name === 'excel_todos' ||
-            e.submitter.name === 'excel_solo_centro' ||
-            e.submitter.name === 'excel_solo_usuario' ||
-            e.submitter.name === 'excel_solo_categoria' ||
-            e.submitter.name === 'excel_solo_horas'
+        // Guardar el último botón pulsado
+        if (e.submitter) {
+            lastSubmitter = e.submitter;
+        }
+        const filtro = lastSubmitter && (
+            lastSubmitter.name === 'excel_centro_usuario' ||
+            lastSubmitter.name === 'excel_centro_categoria' ||
+            lastSubmitter.name === 'excel_centro_horas' ||
+            lastSubmitter.name === 'excel_todos' ||
+            lastSubmitter.name === 'excel_solo_centro' ||
+            lastSubmitter.name === 'excel_solo_usuario' ||
+            lastSubmitter.name === 'excel_solo_categoria' ||
+            lastSubmitter.name === 'excel_solo_horas'
         );
         if (filtro && !start.value && !end.value) {
             e.preventDefault();
@@ -284,6 +289,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 const todayStr = `${yyyy}-${mm}-${dd}`;
                 start.value = todayStr;
                 end.value = todayStr;
+                // Añadir input oculto con el nombre y valor del botón pulsado
+                if (lastSubmitter) {
+                    let hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = lastSubmitter.name;
+                    hidden.value = lastSubmitter.value || '1';
+                    form.appendChild(hidden);
+                }
                 form.submit();
             };
             // Al pulsar "Modificar fechas"

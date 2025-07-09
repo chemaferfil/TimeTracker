@@ -33,51 +33,47 @@ def admin_required(f):
 @admin_required
 def export_excel():
     if request.method == "POST":
-        # Detectar qué botón se ha pulsado y recoger los filtros correctos
-        if "excel_centro_usuario" in request.form:
+        # Detectar qué botón se ha pulsado realmente (el último en el array de botones recibidos)
+        botones = [k for k in request.form.keys() if k.startswith('excel_')]
+        boton_pulsado = botones[-1] if botones else None
+
+        # LOG de depuración para ver los valores recibidos
+        print('--- FILTROS RECIBIDOS ---')
+        print('Botones recibidos:', botones)
+        print('Botón realmente pulsado:', boton_pulsado)
+        print('centro1:', request.form.get('centro1'))
+        print('usuario1:', request.form.get('usuario1'))
+        print('centro2:', request.form.get('centro2'))
+        print('categoria2:', request.form.get('categoria2'))
+        print('centro3:', request.form.get('centro3'))
+        print('horas3:', request.form.get('horas3'))
+        print('centro4:', request.form.get('centro4'))
+        print('usuario4:', request.form.get('usuario4'))
+        print('categoria4:', request.form.get('categoria4'))
+        print('horas4:', request.form.get('horas4'))
+        print('start_date:', request.form.get('start_date'))
+        print('end_date:', request.form.get('end_date'))
+
+        # Inicializar filtros
+        centro = user_id = categoria = weekly_hours = None
+
+        # Usar los campos correctos según el botón realmente pulsado
+        if boton_pulsado == "excel_centro_usuario":
             centro = request.form.get("centro1")
             user_id = request.form.get("usuario1")
-            categoria = None
-            weekly_hours = None
-        elif "excel_usuario" in request.form:
-            centro = None
-            user_id = request.form.get("usuario1")
-            categoria = None
-            weekly_hours = None
-        elif "excel_categoria" in request.form:
-            centro = None
-            user_id = None
+        elif boton_pulsado == "excel_centro_categoria":
+            centro = request.form.get("centro2")
             categoria = request.form.get("categoria2")
-            weekly_hours = None
-        elif "excel_horas" in request.form:
-            centro = None
-            user_id = None
-            categoria = None
+        elif boton_pulsado == "excel_centro_horas":
+            centro = request.form.get("centro3")
             weekly_hours = request.form.get("horas3")
-        elif "excel_todos" in request.form:
+        elif boton_pulsado == "excel_solo_centro":
             centro = request.form.get("centro4")
+        elif boton_pulsado == "excel_solo_usuario":
             user_id = request.form.get("usuario4")
+        elif boton_pulsado == "excel_solo_categoria":
             categoria = request.form.get("categoria4")
-            weekly_hours = request.form.get("horas4")
-        elif "excel_solo_centro" in request.form:
-            centro = request.form.get("centro4")
-            user_id = None
-            categoria = None
-            weekly_hours = None
-        elif "excel_solo_usuario" in request.form:
-            centro = None
-            user_id = request.form.get("usuario4")
-            categoria = None
-            weekly_hours = None
-        elif "excel_solo_categoria" in request.form:
-            centro = None
-            user_id = None
-            categoria = request.form.get("categoria4")
-            weekly_hours = None
-        elif "excel_solo_horas" in request.form:
-            centro = None
-            user_id = None
-            categoria = None
+        elif boton_pulsado == "excel_solo_horas":
             weekly_hours = request.form.get("horas4")
         else:
             # Compatibilidad con los filtros antiguos
@@ -106,18 +102,29 @@ def export_excel():
             flash("Formato de fecha inválido. Use YYYY-MM-DD.", "danger")
             return redirect(url_for("export.export_excel"))
 
+        print('Valores usados para filtrar:')
+        print('centro:', centro)
+        print('user_id:', user_id)
+        print('categoria:', categoria)
+        print('weekly_hours:', weekly_hours)
+        print('--------------------------')
+
         # JOIN explícito para evitar AmbiguousForeignKeysError
         query = TimeRecord.query.join(User, TimeRecord.user_id == User.id).filter(
             TimeRecord.date >= start_date,
             TimeRecord.date <= end_date
         )
 
-        if user_id:
-            query = query.filter(TimeRecord.user_id == user_id)
-        if categoria:
-            query = query.filter(User.categoria == categoria)
+        # El filtro de centro debe aplicarse siempre que se seleccione (antes que cualquier otro)
         if centro:
             query = query.filter(User.centro == centro)
+        # El filtro de usuario solo si se selecciona uno concreto
+        if user_id:
+            query = query.filter(TimeRecord.user_id == user_id)
+        # El filtro de categoría solo si se selecciona una concreta
+        if categoria:
+            query = query.filter(User.categoria == categoria)
+        # El filtro de horas solo si se selecciona una concreta
         if weekly_hours:
             try:
                 wh = int(weekly_hours)
