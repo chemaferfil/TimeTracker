@@ -33,19 +33,42 @@ def admin_required(f):
 @admin_required
 def export_excel():
     if request.method == "POST":
+        # Detectar qué botón se ha pulsado y recoger los filtros correctos
+        if "excel_centro_usuario" in request.form:
+            centro = request.form.get("centro1")
+            user_id = request.form.get("usuario1")
+            categoria = None
+            weekly_hours = None
+        elif "excel_centro_categoria" in request.form:
+            centro = request.form.get("centro2")
+            user_id = None
+            categoria = request.form.get("categoria2")
+            weekly_hours = None
+        elif "excel_centro_horas" in request.form:
+            centro = request.form.get("centro3")
+            user_id = None
+            categoria = None
+            weekly_hours = request.form.get("horas3")
+        elif "excel_todos" in request.form:
+            centro = request.form.get("centro4")
+            user_id = request.form.get("usuario4")
+            categoria = request.form.get("categoria4")
+            weekly_hours = request.form.get("horas4")
+        else:
+            # Compatibilidad con los filtros antiguos
+            centro = request.form.get("centro")
+            user_id = request.form.get("user_id")
+            categoria = request.form.get("categoria")
+            weekly_hours = request.form.get("weekly_hours") or request.form.get("jornada")
+
         start_date = request.form.get("start_date")
         end_date = request.form.get("end_date")
-        user_id = request.form.get("user_id")
-        categoria = request.form.get("categoria")
-        centro = request.form.get("centro")
-        weekly_hours = request.form.get("weekly_hours") or request.form.get("jornada")
 
         # Validación fechas
         try:
             if start_date:
                 start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
             else:
-                # Si no se especifican fechas, filtra solo por hoy
                 start_date = date.today()
             if end_date:
                 end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
@@ -233,7 +256,7 @@ def export_pdf_daily():
     pdf.cell(0, 10, f"Registros de fichaje del {fecha.strftime('%d/%m/%Y')}", ln=1, align="C")
 
     pdf.set_font("Arial", "B", 10)
-    header = ["Usuario", "Nombre completo", "Categoría", "Centro", "Entrada", "Salida", "Horas Trabajadas", "Notas"]
+    header = ["Usuario", "Nombre completo", "Categoría", "Centro", "Entrada", "Salida", "Horas", "Notas"]
     col_widths = [30, 40, 25, 30, 22, 22, 30, 55]
 
     for i, col_name in enumerate(header):
