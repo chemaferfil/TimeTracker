@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from flask import Flask, render_template
 from models.database import db
-from flask_migrate import Migrate, upgrade as migrate_upgrade
+from flask_migrate import Migrate  # <-- Sin upgrade temporalmente
 from routes.auth import auth_bp
 from routes.time import time_bp
 from routes.admin import admin_bp
@@ -48,10 +48,10 @@ app.register_blueprint(time_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(export_bp)
 
-# Ejecutar migraciones y crear tablas (solo en arranque)
+# Ejecutar solo creación de tablas localmente (sin migraciones automáticas)
 with app.app_context():
     from models.models import User, TimeRecord
-    migrate_upgrade()
+    # migrate_upgrade()  ← Lo volverás a activar más adelante
     db.create_all()
 
 # Ruta de inicio
