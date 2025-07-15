@@ -110,20 +110,7 @@
       </header>
 
       <div class="p-4">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            <div class="space-y-2">
-              {% for category, message in messages %}
-                <div class="px-4 py-2 rounded text-sm
-                  {% if category=='success' %} bg-green-100 text-green-800
-                  {% elif category=='danger' %} bg-red-100 text-red-800
-                  {% else %} bg-sushi-100 text-sushi-800 {% endif %}">
-                  {{ message }}
-                </div>
-              {% endfor %}
-            </div>
-          {% endif %}
-        {% endwith %}
+
       </div>
 
       <main class="flex-1 p-2 overflow-auto">

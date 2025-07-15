@@ -240,6 +240,10 @@ def manage_records():
     start_of_week = start_of_current - timedelta(days=week_offset)
     end_of_week = start_of_week + timedelta(days=6)
 
+    # Calcular número de semana ISO y rango de días
+    week_number = start_of_week.isocalendar().week
+    week_range = f"{start_of_week.day} - {end_of_week.day} de {start_of_week.strftime('%B').capitalize()}"
+
     # Buscar registros solo de esa semana
     recs = (
         TimeRecord.query
@@ -293,17 +297,24 @@ def manage_records():
     # Mostramos la semana más reciente primero
     enriched = enriched[::-1]
 
+    # Calcular si es la semana actual
+    is_current_week = (start_of_week == start_of_current)
+
     return render_template(
         "manage_records.html",
         records=enriched,
         page=page,
-        has_next=has_next
+        has_next=has_next,
+        week_number=week_number,
+        week_range=week_range,
+        is_current_week=is_current_week
     )
 
 @admin_bp.route("/records/edit/<int:record_id>", methods=["GET", "POST"])
 @admin_required
 def edit_record(record_id):
     record = TimeRecord.query.get_or_404(record_id)
+    page = request.args.get("page", type=int, default=1)
     if request.method == "POST":
         try:
             ds = request.form.get("date")
@@ -323,11 +334,11 @@ def edit_record(record_id):
 
             db.session.commit()
             flash("Registro actualizado.", "success")
-            return redirect(url_for("admin.manage_records"))
+            return redirect(url_for("admin.manage_records", page=page, edited=record.id))
 
         except ValueError:
             flash("Formato fecha/hora inválido.", "danger")
-    return render_template("record_form.html", record=record)
+    return render_template("record_form.html", record=record, page=page)
 
 @admin_bp.route("/records/delete/<int:record_id>", methods=["POST"])
 @admin_required

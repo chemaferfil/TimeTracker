@@ -5,12 +5,14 @@
 {% block content %}
 <section class="bg-gray-900 shadow-md rounded-lg p-6 mb-8">
   <!-- Paginación por semanas -->
-  <div class="flex gap-2 mb-6">
+  <div class="flex gap-2 mb-6 items-center">
     {% if page > 1 %}
       <a href="{{ url_for('admin.manage_records', page=page-1) }}"
          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana anterior</a>
     {% endif %}
-    <span class="px-4 py-2 bg-gray-700 text-gray-300 rounded">Semana {{ page }}</span>
+    <span class="px-4 py-2 rounded font-semibold {% if is_current_week %}bg-fuchsia-700 text-white{% else %}bg-gray-700 text-gray-300{% endif %}">
+      Semana {{ week_number }} ({{ week_range }})
+    </span>
     {% if has_next %}
       <a href="{{ url_for('admin.manage_records', page=page+1) }}"
          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana siguiente</a>
@@ -20,22 +22,20 @@
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       {% for category, message in messages %}
-        <div class="p-4 mb-4 text-sm rounded-lg 
-          {% if category == 'success' %} bg-green-900 text-green-300
-          {% elif category == 'danger' %} bg-red-900 text-red-300
-          {% elif category == 'info' %} bg-blue-900 text-blue-300
-          {% else %} bg-gray-800 text-gray-300
-          {% endif %}" role="alert">
+        {% if category == 'success' %}
+        <div id="flash-success" class="p-4 mb-4 text-sm rounded-lg bg-green-900 text-green-300 transition-opacity duration-500" role="alert">
           {{ message }}
         </div>
+        {% endif %}
       {% endfor %}
     {% endif %}
   {% endwith %}
 
   <div class="overflow-x-auto">
-    <table class="min-w-full leading-normal">
+    <table class="min-w-full leading-normal" id="records-table">
       <thead>
         <tr class="bg-gray-800 text-left text-gray-400 uppercase text-sm">
+          <th class="px-2 py-3 border-b border-gray-700"></th> <!-- Columna de marca -->
           <th class="px-5 py-3 border-b border-gray-700">Usuario</th>
           <th class="px-5 py-3 border-b border-gray-700">Fecha</th>
           <th class="px-5 py-3 border-b border-gray-700">Entrada</th>
@@ -51,7 +51,8 @@
       </thead>
       <tbody class="text-gray-200">
         {% for item in records %}
-        <tr class="border-b border-gray-700 hover:bg-gray-800">
+        <tr class="border-b border-gray-700 hover:bg-gray-800" data-record-id="{{ item.record.id }}">
+          <td class="px-2 py-4 text-center mark-cell"></td>
           <td class="px-5 py-4">{{ item.record.user.username }}</td>
           <td class="px-5 py-4">{{ item.record.date.strftime("%d-%m-%Y") }}</td>
           <td class="px-5 py-4">{{ item.record.check_in.strftime("%H:%M:%S") if item.record.check_in else '-' }}</td>
@@ -69,8 +70,8 @@
           <td class="px-5 py-4">{{ item.record.notes or '' }}</td>
           <td class="px-5 py-4">{{ item.record.updated_at.strftime("%d-%m-%Y %H:%M:%S") if item.record.updated_at else '-' }}</td>
           <td class="px-5 py-4 space-x-2">
-            <a href="{{ url_for('admin.edit_record', record_id=item.record.id) }}"
-               class="bg-fuchsia-800 hover:bg-fuchsia-700 text-white px-3 py-1 rounded text-xs">Editar</a>
+            <a href="{{ url_for('admin.edit_record', record_id=item.record.id, page=page) }}"
+               class="bg-fuchsia-800 hover:bg-fuchsia-700 text-white px-3 py-1 rounded text-xs edit-link">Editar</a>
             <form action="{{ url_for('admin.delete_record', record_id=item.record.id) }}"
                   method="POST" class="inline-block"
                   onsubmit="return confirm('¿Seguro que deseas eliminar este registro?');">
@@ -81,7 +82,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="10" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">
+          <td colspan="12" class="px-5 py-5 border-b border-gray-700 text-center text-gray-500">
             No hay registros para mostrar.
           </td>
         </tr>
@@ -90,4 +91,60 @@
     </table>
   </div>
 </section>
+
+<script>
+// --- Ocultar mensaje de éxito tras 3 segundos ---
+document.addEventListener('DOMContentLoaded', function() {
+  const flash = document.getElementById('flash-success');
+  if (flash) {
+    setTimeout(() => {
+      flash.style.opacity = '0';
+      setTimeout(() => flash.remove(), 500);
+    }, 3000);
+  }
+});
+// --- Stick permanente y resaltado temporal ---
+(function() {
+  function getParam(name) {
+    const url = new URL(window.location.href);
+    return url.searchParams.get(name);
+  }
+  // Stick global para todos los registros editados
+  const stickKey = 'edited_records_global';
+  let stickIds = [];
+  try {
+    stickIds = JSON.parse(localStorage.getItem(stickKey)) || [];
+  } catch (e) { stickIds = []; }
+  // Resaltado temporal solo para la edición actual
+  const tempKey = 'edited_record_temp';
+  let tempId = getParam('edited');
+  if (tempId && !stickIds.includes(tempId)) {
+    stickIds.push(tempId);
+    localStorage.setItem(stickKey, JSON.stringify(stickIds));
+    localStorage.setItem(tempKey, tempId);
+  }
+  document.addEventListener('DOMContentLoaded', function() {
+    const rows = document.querySelectorAll('tr[data-record-id]');
+    const tempEdited = localStorage.getItem(tempKey);
+    rows.forEach(row => {
+      const rid = row.getAttribute('data-record-id');
+      // Stick permanente
+      if (stickIds.includes(rid)) {
+        const markCell = row.querySelector('.mark-cell');
+        if (markCell) {
+          markCell.innerHTML = '<span style="font-size:1.3em; color:#22c55e;">✅</span>';
+        }
+      }
+      // Resaltado temporal solo para la edición actual
+      if (tempEdited && rid === tempEdited) {
+        row.style.backgroundColor = 'rgba(34,197,94,0.08)'; // verde clarito muy suave
+      }
+    });
+    // Eliminar el resaltado temporal al cambiar de semana o recargar
+    window.addEventListener('beforeunload', function() {
+      localStorage.removeItem(tempKey);
+    });
+  });
+})();
+</script>
 {% endblock %}

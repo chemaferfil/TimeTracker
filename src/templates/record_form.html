@@ -7,7 +7,7 @@
     <h2 class="text-3xl font-bold text-gray-200 mb-6">Editar Registro de Fichaje</h2>
 
     <div class="bg-gray-900 shadow-md rounded-lg p-6">
-        <form method="POST" action="">
+        <form method="POST" action="?page={{ page|default(1) }}">
             <div class="mb-4">
                 <label for="user_display" class="block text-gray-400 text-sm font-bold mb-2">Usuario:</label>
                 <input type="text" id="user_display" value="{{ record.user.username if record else '' }}" disabled 
