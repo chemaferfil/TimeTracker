@@ -13,6 +13,7 @@ from routes.auth import auth_bp
 from routes.time import time_bp
 from routes.admin import admin_bp
 from routes.export import export_bp
+from sqlalchemy.pool import NullPool
 
 # Crear instancia de la app Flask
 app = Flask(
@@ -36,7 +37,12 @@ else:
 
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    "pool_pre_ping": True
+    "pool_pre_ping": True,
+    "pool_recycle": 300,
+    "pool_timeout": 20,
+    "max_overflow": 0,
+    # Use NullPool for eventlet to avoid threading issues
+    "poolclass": NullPool if os.getenv('DYNO') or os.getenv('RENDER') else None
 }
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -50,17 +56,23 @@ app.register_blueprint(time_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(export_bp)
 
-# Ejecutar solo creación de tablas localmente (sin migraciones automáticas)
-with app.app_context():
-    from models.models import User, TimeRecord
-    migrate_upgrade()
-    db.create_all()
-
 # Ruta de inicio
 @app.route('/')
 def index():
     return render_template("welcome.html")
 
+def init_db():
+    """Initialize database tables and run migrations"""
+    with app.app_context():
+        from models.models import User, TimeRecord
+        migrate_upgrade()
+        db.create_all()
+
 if __name__ == '__main__':
+    # Solo inicializar la base de datos cuando se ejecuta directamente (no con gunicorn)
+    init_db()
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+else:
+    # Cuando se ejecuta con gunicorn, inicializar la base de datos después de crear la app
+    init_db()
