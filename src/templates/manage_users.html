@@ -5,61 +5,63 @@
 {% block header %}<span class="text-miss-sushi-pink">Gestionar Usuarios</span>{% endblock %}
 
 {% block content %}
-<div class="mb-6">
+<div class="mb-5 -ml-2 md:-ml-4">
     <a href="{{ url_for('admin.add_user') }}" 
        class="inline-block py-2 px-4 rounded-lg bg-fuchsia-800 text-white hover:bg-fuchsia-700 transition-colors duration-300 ease-in-out shadow-md">
         Añadir Nuevo Usuario
     </a>
 </div>
 
-<div class="overflow-x-auto bg-gray-900 border border-gray-700 rounded-lg shadow-md">
+<div class="overflow-x-auto bg-gray-900 border border-gray-700 rounded-lg shadow-md -ml-2 md:-ml-4">
     <table class="min-w-full divide-y divide-gray-700 text-sm">
-        <thead class="bg-gray-800 text-gray-400">
+        <thead class="bg-gray-800 text-gray-400 text-xs uppercase">
             <tr>
-                <th class="px-6 py-3 text-left uppercase">Username</th>
-                <th class="px-6 py-3 text-left uppercase">Nombre Completo</th>
-                <th class="px-6 py-3 text-left uppercase">Email</th>
-                <th class="px-6 py-3 text-left uppercase">Admin</th>
-                <th class="px-6 py-3 text-left uppercase">Activo</th>
-                <th class="px-6 py-3 text-left uppercase">Horas/Sem</th>
-                <th class="px-6 py-3 text-left uppercase">Categoría</th>
-                <th class="px-6 py-3 text-left uppercase">Centro</th>
-                <th class="px-6 py-3 text-left uppercase">Acciones</th>
+                <th class="px-4 py-2 text-left">Username</th>
+                <th class="px-4 py-2 text-left">Nombre Completo</th>
+                <th class="px-4 py-2 text-left">Email</th>
+                <th class="px-4 py-2 text-left">Admin</th>
+                <th class="px-4 py-2 text-left">Activo</th>
+                <th class="px-4 py-2 text-left">Horas/Sem</th>
+                <th class="px-4 py-2 text-left">Categoría</th>
+                <th class="px-4 py-2 text-left">Centro</th>
+                <th class="px-4 py-2 text-left">Acciones</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-gray-700">
             {% for user in users %}
             <tr>
-                <td class="px-6 py-4 whitespace-nowrap text-gray-100">{{ user.username }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-gray-100">{{ user.full_name }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-gray-100">{{ user.email }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-gray-100">{{ 'Sí' if user.is_admin else 'No' }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-gray-100">{{ 'Sí' if user.is_active else 'No' }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-center text-gray-100">{{ user.weekly_hours }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-gray-100">{{ user.categoria or '-'}}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-gray-100">{{ user.centro or '-'}}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                    <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" 
-                       class="inline-block py-1 px-3 rounded bg-miss-sushi-grey text-white hover:opacity-90 transition-opacity duration-300 ease-in-out">
-                        Editar
-                    </a>
-                    <form action="{{ url_for('admin.toggle_user_active', user_id=user.id) }}" method="POST" class="inline-block">
-                        <button type="submit" 
-                                class="py-1 px-3 rounded {{ 'bg-red-600 hover:bg-red-700' if user.is_active else 'bg-green-600 hover:bg-green-700' }} text-white transition-colors duration-300 ease-in-out">
-                            {{ 'Desactivar' if user.is_active else 'Activar' }}
-                        </button>
-                    </form>
-                    <form action="{{ url_for('admin.delete_user', user_id=user.id) }}" method="POST" class="inline-block" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este usuario?');">
-                        <button type="submit" 
-                                class="py-1 px-3 rounded bg-red-800 hover:bg-red-700 text-white transition-colors duration-300 ease-in-out">
-                            Eliminar
-                        </button>
-                    </form>
+                <td class="px-3 py-2 whitespace-nowrap text-gray-100">{{ user.username }}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-gray-100">{{ user.full_name }}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-gray-100">{{ user.email }}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-gray-100">{{ 'Sí' if user.is_admin else 'No' }}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-gray-100">{{ 'Sí' if user.is_active else 'No' }}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-center text-gray-100">{{ user.weekly_hours }}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-gray-100">{{ user.categoria or '-'}}</td>
+                <td class="px-3 py-2 whitespace-nowrap text-gray-100">{{ user.centro or '-'}}</td>
+                <td class="px-3 py-2 whitespace-nowrap">
+                    <div class="flex items-center gap-2">
+                        <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" 
+                           class="inline-block py-1 px-2.5 rounded bg-miss-sushi-grey text-white hover:opacity-90 transition-opacity duration-300 ease-in-out text-xs">
+                            Editar
+                        </a>
+                        <form action="{{ url_for('admin.toggle_user_active', user_id=user.id) }}" method="POST" class="inline">
+                            <button type="submit" 
+                                    class="py-1 px-2.5 rounded {{ 'bg-red-600 hover:bg-red-700' if user.is_active else 'bg-green-600 hover:bg-green-700' }} text-white transition-colors duration-300 ease-in-out text-xs">
+                                {{ 'Desactivar' if user.is_active else 'Activar' }}
+                            </button>
+                        </form>
+                        <form action="{{ url_for('admin.delete_user', user_id=user.id) }}" method="POST" class="inline" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este usuario?');">
+                            <button type="submit" 
+                                    class="py-1 px-2.5 rounded bg-red-800 hover:bg-red-700 text-white transition-colors duration-300 ease-in-out text-xs">
+                                Eliminar
+                            </button>
+                        </form>
+                    </div>
                 </td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="8" class="px-6 py-4 text-center text-gray-500">No hay usuarios registrados.</td>
+                <td colspan="8" class="px-4 py-3 text-center text-gray-500">No hay usuarios registrados.</td>
             </tr>
             {% endfor %}
         </tbody>
