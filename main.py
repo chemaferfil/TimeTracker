@@ -36,16 +36,26 @@ else:
     uri = uri.replace("postgres://", "postgresql://")  # Compatibilidad con Render
 
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    "pool_pre_ping": True,
-    "pool_recycle": 300,
-    "pool_timeout": 20,
-    "max_overflow": 0,
-    # Use NullPool for eventlet to avoid threading issues
-    "poolclass": NullPool if os.getenv('DYNO') or os.getenv('RENDER') else None
-}
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Configure SQLAlchemy engine options based on environment
+is_production = os.getenv('DYNO') or os.getenv('RENDER')
+if is_production:
+    # Production environment with eventlet - use NullPool
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+        # NullPool doesn't support pool_timeout or max_overflow
+        "poolclass": NullPool
+    }
+else:
+    # Development environment - use default pooling
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+        "pool_timeout": 20,
+        "max_overflow": 0
+    }
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Inicializar extensiones
 db.init_app(app)
 migrate = Migrate(app, db)
