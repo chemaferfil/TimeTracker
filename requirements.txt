@@ -33,3 +33,4 @@ wsproto==1.2.0
 et-xmlfile==2.0.0
 psycopg2-binary==2.9.9
 gunicorn==21.2.0
+pytz==2024.1

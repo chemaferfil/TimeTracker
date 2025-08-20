@@ -9,6 +9,7 @@ import calendar
 
 from models.models import TimeRecord, User, EmployeeStatus
 from models.database import db
+from utils.timezone_utils import get_madrid_now, convert_to_madrid
 
 time_bp = Blueprint("time", __name__)
 
@@ -37,9 +38,9 @@ def check_in():
      # BUSCA REGISTRO ABIERTO
     existing_open = TimeRecord.query.filter_by(user_id=user_id, check_out=None).order_by(desc(TimeRecord.id)).first()
     if existing_open:
-        # Permite al usuario cerrarlo desde aquí
-        flash(f"Tienes un fichaje abierto desde {existing_open.check_in.strftime('%d-%m-%Y %H:%M:%S')}. Debes cerrarlo antes de fichar entrada.", "warning")
-        # Opcional: Puedes redirigir a un formulario donde el usuario pueda cerrarlo, o incluso cerrarlo automáticamente con la hora actual.
+        # Convert to Madrid timezone for display
+        madrid_time = convert_to_madrid(existing_open.check_in)
+        flash(f"Tienes un fichaje abierto desde {madrid_time.strftime('%d-%m-%Y %H:%M:%S')}. Debes cerrarlo antes de fichar entrada.", "warning")
         return redirect(url_for("time.dashboard_employee"))
 
     try:
@@ -69,13 +70,16 @@ def check_in():
             .first()
         )
         if existing_open:
+            # Convert to Madrid timezone for display
+            madrid_time = convert_to_madrid(existing_open.check_in)
             flash(
                 f"Ya tienes un registro abierto desde "
-                f"{existing_open.check_in.strftime('%d-%m-%Y %H:%M:%S')}.",
+                f"{madrid_time.strftime('%d-%m-%Y %H:%M:%S')}.",
                 "warning"
             )
         else:
-            now = datetime.now()
+            # Use Madrid timezone for new records
+            now = get_madrid_now()
 
             # --- crear TimeRecord ---
             new_rec = TimeRecord(user_id=user_id, check_in=now, date=now.date())
@@ -124,7 +128,8 @@ def check_out():
             .first()
         )
         if open_record:
-            now = datetime.now()
+            # Use Madrid timezone for check-out
+            now = get_madrid_now()
             open_record.check_out = now
             open_record.notes = request.form.get("notes", "")
             db.session.commit()
@@ -183,8 +188,17 @@ def dashboard_employee():
     recent_fmt = []
     for rec in recent:
         dur = rec.check_out - rec.check_in if rec.check_in and rec.check_out else None
+        # Convert times to Madrid timezone for display
+        madrid_record = {
+            'id': rec.id,
+            'check_in': convert_to_madrid(rec.check_in) if rec.check_in else None,
+            'check_out': convert_to_madrid(rec.check_out) if rec.check_out else None,
+            'date': rec.date,
+            'notes': rec.notes,
+            'user_id': rec.user_id
+        }
         recent_fmt.append({
-            "record": rec,
+            "record": madrid_record,
             "duration_formatted": format_timedelta(dur),
             "remaining": format_timedelta(timedelta(seconds=remain_secs)),
             "is_over": remain_secs == 0
@@ -197,10 +211,22 @@ def dashboard_employee():
         .first()
     )
 
+    # Convert today_record to Madrid timezone if exists
+    madrid_today_record = None
+    if today_record:
+        madrid_today_record = {
+            'id': today_record.id,
+            'check_in': convert_to_madrid(today_record.check_in) if today_record.check_in else None,
+            'check_out': convert_to_madrid(today_record.check_out) if today_record.check_out else None,
+            'date': today_record.date,
+            'notes': today_record.notes,
+            'user_id': today_record.user_id
+        }
+
     return render_template(
         "employee_dashboard.html",
         user=user,
-        today_record=today_record,
+        today_record=madrid_today_record,
         recent_records=recent_fmt
     )
 
@@ -223,7 +249,16 @@ def history():
     data = []
     for r in recs:
         dur = r.check_out - r.check_in if r.check_in and r.check_out else None
-        data.append({"record": r, "duration_formatted": format_timedelta(dur)})
+        # Convert times to Madrid timezone for display
+        madrid_record = {
+            'id': r.id,
+            'check_in': convert_to_madrid(r.check_in) if r.check_in else None,
+            'check_out': convert_to_madrid(r.check_out) if r.check_out else None,
+            'date': r.date,
+            'notes': r.notes,
+            'user_id': r.user_id
+        }
+        data.append({"record": madrid_record, "duration_formatted": format_timedelta(dur)})
 
     return render_template("history.html", records=data)
 

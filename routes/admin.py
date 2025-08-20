@@ -6,6 +6,7 @@ from functools import wraps
 from datetime import datetime, date, timedelta
 from models.models import User, TimeRecord, EmployeeStatus
 from models.database import db
+from utils.timezone_utils import convert_to_madrid
 
 admin_bp = Blueprint(
     "admin", __name__,
@@ -79,8 +80,19 @@ def dashboard():
         week_acc[uid] = curr
         rem = weekly_secs - curr
 
+        # Convert record times to Madrid timezone for display
+        madrid_record = {
+            'id': rec.id,
+            'user_id': rec.user_id,
+            'check_in': convert_to_madrid(rec.check_in) if rec.check_in else None,
+            'check_out': convert_to_madrid(rec.check_out) if rec.check_out else None,
+            'date': rec.date,
+            'notes': rec.notes,
+            'user': rec.user  # Keep the user relation
+        }
+
         records_with_accum.append({
-            "record": rec,
+            "record": madrid_record,
             "duration_formatted": format_timedelta(dur) if dur else "-",
             "remaining_formatted": format_timedelta(timedelta(seconds=abs(int(rem)))),
             "is_over": rem < 0,
@@ -280,8 +292,19 @@ def manage_records():
         curr_week_total = weekly_acc[uid][sow_str]
         rem = wh_secs - curr_week_total
 
+        # Convert record times to Madrid timezone for display
+        madrid_record = {
+            'id': rec.id,
+            'user_id': rec.user_id,
+            'check_in': convert_to_madrid(rec.check_in) if rec.check_in else None,
+            'check_out': convert_to_madrid(rec.check_out) if rec.check_out else None,
+            'date': rec.date,
+            'notes': rec.notes,
+            'user': rec.user  # Keep the user relation
+        }
+
         enriched.append({
-            "record": rec,
+            "record": madrid_record,
             "duration_formatted": format_timedelta(dur),
             "remaining": format_timedelta(timedelta(seconds=abs(int(rem)))),
             "is_over": rem < 0
@@ -321,10 +344,23 @@ def edit_record(record_id):
             ci = request.form.get("check_in")
             co = request.form.get("check_out")
 
-            record.date      = datetime.strptime(ds, "%Y-%m-%d").date()
-            record.check_in  = datetime.strptime(f"{ds} {ci}", "%Y-%m-%d %H:%M:%S") if ci else None
-            record.check_out = datetime.strptime(f"{ds} {co}", "%Y-%m-%d %H:%M:%S") if co else None
-            record.notes     = request.form.get("notes")
+            record.date = datetime.strptime(ds, "%Y-%m-%d").date()
+            
+            # Parse times and treat them as Madrid timezone
+            from utils.timezone_utils import MADRID_TZ
+            if ci:
+                parsed_ci = datetime.strptime(f"{ds} {ci}", "%Y-%m-%d %H:%M:%S")
+                record.check_in = MADRID_TZ.localize(parsed_ci)
+            else:
+                record.check_in = None
+                
+            if co:
+                parsed_co = datetime.strptime(f"{ds} {co}", "%Y-%m-%d %H:%M:%S")
+                record.check_out = MADRID_TZ.localize(parsed_co)
+            else:
+                record.check_out = None
+                
+            record.notes = request.form.get("notes")
             record.modified_by = session.get("user_id")
 
             if record.check_in and record.check_out and record.check_out < record.check_in:
@@ -338,7 +374,18 @@ def edit_record(record_id):
 
         except ValueError:
             flash("Formato fecha/hora inválido.", "danger")
-    return render_template("record_form.html", record=record, page=page)
+    
+    # Convert record times to Madrid timezone for form display
+    madrid_record = {
+        'id': record.id,
+        'user_id': record.user_id,
+        'check_in': convert_to_madrid(record.check_in) if record.check_in else None,
+        'check_out': convert_to_madrid(record.check_out) if record.check_out else None,
+        'date': record.date,
+        'notes': record.notes
+    }
+    
+    return render_template("record_form.html", record=madrid_record, page=page)
 
 @admin_bp.route("/records/delete/<int:record_id>", methods=["POST"])
 @admin_required
@@ -551,11 +598,30 @@ def open_records():
         record = TimeRecord.query.get(record_id)
         if record and close_time:
             try:
-                record.check_out = datetime.strptime(close_time, "%Y-%m-%dT%H:%M")
+                # Parse the datetime and treat it as Madrid time
+                parsed_time = datetime.strptime(close_time, "%Y-%m-%dT%H:%M")
+                # Store as Madrid timezone
+                from utils.timezone_utils import MADRID_TZ
+                madrid_time = MADRID_TZ.localize(parsed_time)
+                record.check_out = madrid_time
                 db.session.commit()
                 flash("Registro cerrado correctamente.", "success")
             except Exception as e:
                 flash(f"Error al cerrar: {e}", "danger")
         return redirect(url_for("admin.open_records"))
 
-    return render_template("open_records.html", open_records=open_records)
+    # Convert records to Madrid timezone for display
+    madrid_records = []
+    for rec in open_records:
+        madrid_record = {
+            'id': rec.id,
+            'user_id': rec.user_id,
+            'check_in': convert_to_madrid(rec.check_in) if rec.check_in else None,
+            'check_out': convert_to_madrid(rec.check_out) if rec.check_out else None,
+            'date': rec.date,
+            'notes': rec.notes,
+            'user': rec.user
+        }
+        madrid_records.append(madrid_record)
+
+    return render_template("open_records.html", open_records=madrid_records)
