@@ -1,6 +1,3 @@
-import eventlet
-# More conservative monkey patching to avoid threading issues
-eventlet.monkey_patch(socket=True, select=True, thread=False)
 import os
 import sys
 
@@ -14,7 +11,6 @@ from routes.auth import auth_bp
 from routes.time import time_bp
 from routes.admin import admin_bp
 from routes.export import export_bp
-from sqlalchemy.pool import NullPool
 
 # Crear instancia de la app Flask
 app = Flask(
@@ -46,15 +42,13 @@ print("Usando BD:", app.config['SQLALCHEMY_DATABASE_URI'], file=sys.stderr)
 # Configure SQLAlchemy engine options based on environment
 is_production = os.getenv('DYNO') or os.getenv('RENDER')
 if is_production:
-    # Production environment with eventlet - use NullPool and fix eventlet issues
+    # Production environment - standard pooling for sync workers
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         "pool_pre_ping": True,
         "pool_recycle": 300,
-        "poolclass": NullPool,
-        # Fix eventlet concurrency issues
-        "connect_args": {
-            "options": "-c default_transaction_isolation=SERIALIZABLE"
-        } if uri.startswith('postgresql') else {}
+        "pool_size": 10,
+        "max_overflow": 20,
+        "pool_timeout": 30
     }
 else:
     # Development environment - use default pooling
@@ -84,13 +78,10 @@ def _log_db_on_request():
 
 migrate = Migrate(app, db)
 
-# Fix for eventlet threading issues
+# Proper session cleanup
 @app.teardown_appcontext
 def shutdown_session(exception=None):
-    try:
-        db.session.remove()
-    except Exception:
-        pass
+    db.session.remove()
 
 # Context processor para hacer disponible el usuario actual y saludo
 @app.context_processor
