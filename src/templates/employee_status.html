@@ -16,6 +16,11 @@
 {% block content %}
 <div class="max-w-4xl mx-auto bg-gray-900 border border-gray-700 rounded-lg shadow-md p-8">
 
+  <!-- ----------  BOTÓN ATRÁS ---------- -->
+  <div class="mb-4 flex">
+    <a href="{{ url_for('admin.admin_calendar') }}" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded text-white">← Volver al calendario</a>
+  </div>
+
   <!-- ----------  FORMULARIO NUEVO RANGO  ---------- -->
   <form method="POST" class="grid md:grid-cols-5 gap-4 mb-8">
     <div>

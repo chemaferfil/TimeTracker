@@ -3,150 +3,128 @@
 {% block header %}<span class="text-miss-sushi-pink">Gestionar Registros de Fichaje</span>{% endblock %}
 
 {% block content %}
-<section class="bg-gray-900 shadow-md rounded-lg p-4 mb-6">
-  <!-- Paginación por semanas -->
-  <div class="flex gap-2 mb-4 items-center">
-    {% if page > 1 %}
-      <a href="{{ url_for('admin.manage_records', page=page-1) }}"
-         class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana anterior</a>
-    {% endif %}
-    <span class="px-3 py-2 rounded font-semibold {% if is_current_week %}bg-fuchsia-700 text-white{% else %}bg-gray-700 text-gray-300{% endif %}">
-      Semana {{ week_number }} ({{ week_range }})
-    </span>
-    {% if has_next %}
-      <a href="{{ url_for('admin.manage_records', page=page+1) }}"
-         class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana siguiente</a>
-    {% endif %}
-  </div>
+<section class="bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+    <!-- Paginación por semanas -->
+    <div class="flex gap-2 mb-4 items-center">
+      {% if page > 1 %}
+        <a href="{{ url_for('admin.manage_records', page=page-1) }}"
+           class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana anterior</a>
+      {% endif %}
+      <span class="px-3 py-2 rounded font-semibold {% if is_current_week %}bg-fuchsia-700 text-white{% else %}bg-gray-700 text-gray-300{% endif %}">
+        Semana {{ week_number }} ({{ week_range }})
+      </span>
+      {% if has_next %}
+        <a href="{{ url_for('admin.manage_records', page=page+1) }}"
+           class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana siguiente</a>
+      {% endif %}
+    </div>
 
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category, message in messages %}
-        {% if category == 'success' %}
-        <div id="flash-success" class="p-3 mb-3 text-sm rounded-lg bg-green-900 text-green-300 transition-opacity duration-500" role="alert">
-          {{ message }}
-        </div>
-        {% endif %}
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
-
-  <div class="overflow-x-auto">
-    <table class="min-w-full leading-normal text-sm" id="records-table">
-      <thead>
-        <tr class="bg-gray-800 text-left text-gray-400 uppercase text-xs">
-          <th class="px-2 py-2 border-b border-gray-700 w-6"></th> <!-- Columna de marca -->
-          <th class="px-3 py-2 border-b border-gray-700">Usuario</th>
-          <th class="px-3 py-2 border-b border-gray-700">Fecha</th>
-          <th class="px-3 py-2 border-b border-gray-700">Entrada</th>
-          <th class="px-3 py-2 border-b border-gray-700">Salida</th>
-          <th class="px-3 py-2 border-b border-gray-700">Tiempo Trabajado</th>
-          <th class="px-3 py-2 border-b border-gray-700">Horas Restantes</th>
-          <th class="px-3 py-2 border-b border-gray-700">Categoría</th>
-          <th class="px-3 py-2 border-b border-gray-700">Centro</th>
-          <th class="px-3 py-2 border-b border-gray-700">Notas</th>
-          <th class="px-3 py-2 border-b border-gray-700">Última Modificación</th>
-          <th class="px-3 py-2 border-b border-gray-700">Acciones</th>
-        </tr>
-      </thead>
-      <tbody class="text-gray-200">
-        {% for item in records %}
-        <tr class="border-b border-gray-700 hover:bg-gray-800" data-record-id="{{ item.record.id }}">
-          <td class="px-2 py-2 text-center mark-cell"></td>
-          <td class="px-3 py-2">{{ item.record.user.username }}</td>
-          <td class="px-3 py-2 whitespace-nowrap">{{ item.record.date.strftime("%d-%m-%Y") }}</td>
-          <td class="px-3 py-2 whitespace-nowrap">{{ item.record.check_in.strftime("%H:%M:%S") if item.record.check_in else '-' }}</td>
-          <td class="px-3 py-2 whitespace-nowrap">{{ item.record.check_out.strftime("%H:%M:%S") if item.record.check_out else '-' }}</td>
-          <td class="px-3 py-2 whitespace-nowrap">{{ item.duration_formatted }}</td>
-          <td class="px-3 py-2 whitespace-nowrap">
-            {% if item.is_over %}
-              <span class="text-red-500">●</span> -{{ item.remaining }}
-            {% else %}
-              <span class="text-green-500">●</span> {{ item.remaining }}
-            {% endif %}
-          </td>
-          <td class="px-3 py-2">{{ item.record.user.categoria or '-' }}</td>
-          <td class="px-3 py-2">{{ item.record.user.centro or '-' }}</td>
-          <td class="px-3 py-2">{{ item.record.notes or '' }}</td>
-          <td class="px-3 py-2 whitespace-nowrap">{{ item.record.updated_at.strftime("%d-%m-%Y %H:%M:%S") if item.record.updated_at else '-' }}</td>
-          <td class="px-3 py-2 whitespace-nowrap">
-            <div class="flex items-center gap-2">
-              <a href="{{ url_for('admin.edit_record', record_id=item.record.id, page=page) }}"
-                 class="bg-fuchsia-800 hover:bg-fuchsia-700 text-white px-2.5 py-1 rounded text-xs edit-link">Editar</a>
-              <form action="{{ url_for('admin.delete_record', record_id=item.record.id) }}"
-                    method="POST" class="inline"
-                    onsubmit="return confirm('¿Seguro que deseas eliminar este registro?');">
-                <button type="submit"
-                        class="bg-red-800 hover:bg-red-700 text-white px-2.5 py-1 rounded text-xs">Eliminar</button>
-              </form>
-            </div>
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="12" class="px-3 py-3 border-b border-gray-700 text-center text-gray-500">
-            No hay registros para mostrar.
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+    <!-- Filtros -->
+    <form method="get" action="{{ url_for('admin.manage_records') }}" class="grid grid-cols-1 md:grid-cols-7 gap-3 items-end">
+      <input type="hidden" name="page" value="{{ page }}" />
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Fecha desde</label>
+        <input type="date" name="date_from" value="{{ request.args.get('date_from','') }}" class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Fecha hasta</label>
+        <input type="date" name="date_to" value="{{ request.args.get('date_to','') }}" class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Hora desde</label>
+        <input type="time" name="time_from" value="{{ request.args.get('time_from','') }}" class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Hora hasta</label>
+        <input type="time" name="time_to" value="{{ request.args.get('time_to','') }}" class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700" />
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Categoría</label>
+        <select name="categoria" class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700">
+          <option value="">Todas</option>
+          <option value="Cocina" {{ 'selected' if request.args.get('categoria') == 'Cocina' else '' }}>Cocina</option>
+          <option value="Delivery" {{ 'selected' if request.args.get('categoria') == 'Delivery' else '' }}>Delivery</option>
+          <option value="Reparto" {{ 'selected' if request.args.get('categoria') == 'Reparto' else '' }}>Reparto</option>
+          <option value="Sala" {{ 'selected' if request.args.get('categoria') == 'Sala' else '' }}>Sala</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Centro</label>
+        <select name="centro" class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700">
+          <option value="">Todos</option>
+          {% for c in centros %}
+            <option value="{{ c }}" {{ 'selected' if request.args.get('centro') == c else '' }}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex gap-2">
+        <button type="submit" class="px-4 py-2 bg-fuchsia-800 hover:bg-fuchsia-700 text-white rounded">Aplicar</button>
+        <a href="{{ url_for('admin.manage_records', page=page) }}" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Limpiar</a>
+      </div>
+    </form>
 </section>
 
-<script>
-// --- Ocultar mensaje de éxito tras 3 segundos ---
-document.addEventListener('DOMContentLoaded', function() {
-  const flash = document.getElementById('flash-success');
-  if (flash) {
-    setTimeout(() => {
-      flash.style.opacity = '0';
-      setTimeout(() => flash.remove(), 500);
-    }, 3000);
-  }
-});
-// --- Stick permanente y resaltado temporal ---
-(function() {
-  function getParam(name) {
-    const url = new URL(window.location.href);
-    return url.searchParams.get(name);
-  }
-  // Stick global para todos los registros editados
-  const stickKey = 'edited_records_global';
-  let stickIds = [];
-  try {
-    stickIds = JSON.parse(localStorage.getItem(stickKey)) || [];
-  } catch (e) { stickIds = []; }
-  // Resaltado temporal solo para la edición actual
-  const tempKey = 'edited_record_temp';
-  let tempId = getParam('edited');
-  if (tempId && !stickIds.includes(tempId)) {
-    stickIds.push(tempId);
-    localStorage.setItem(stickKey, JSON.stringify(stickIds));
-    localStorage.setItem(tempKey, tempId);
-  }
-  document.addEventListener('DOMContentLoaded', function() {
-    const rows = document.querySelectorAll('tr[data-record-id]');
-    const tempEdited = localStorage.getItem(tempKey);
-    rows.forEach(row => {
-      const rid = row.getAttribute('data-record-id');
-      // Stick permanente
-      if (stickIds.includes(rid)) {
-        const markCell = row.querySelector('.mark-cell');
-        if (markCell) {
-          markCell.innerHTML = '<span style="font-size:1.1em; color:#22c55e;">✅</span>';
-        }
-      }
-      // Resaltado temporal solo para la edición actual
-      if (tempEdited && rid === tempEdited) {
-        row.style.backgroundColor = 'rgba(34,197,94,0.08)'; // verde clarito muy suave
-      }
-    });
-    // Eliminar el resaltado temporal al cambiar de semana o recargar
-    window.addEventListener('beforeunload', function() {
-      localStorage.removeItem(tempKey);
-    });
-  });
-})();
-</script>
+<section class="bg-gray-900 shadow-md rounded-lg p-6">
+    <div class="overflow-x-auto">
+      <table class="min-w-full leading-normal text-sm" id="records-table">
+        <thead>
+          <tr class="bg-gray-800 text-left text-gray-400 uppercase text-xs">
+            <th class="px-2 py-2 border-b border-gray-700 w-6"></th> <!-- Columna de marca -->
+            <th class="px-3 py-2 border-b border-gray-700">Usuario</th>
+            <th class="px-3 py-2 border-b border-gray-700">Fecha</th>
+            <th class="px-3 py-2 border-b border-gray-700">Entrada</th>
+            <th class="px-3 py-2 border-b border-gray-700">Salida</th>
+            <th class="px-3 py-2 border-b border-gray-700">Tiempo Trabajado</th>
+            <th class="px-3 py-2 border-b border-gray-700">Horas Restantes</th>
+            <th class="px-3 py-2 border-b border-gray-700">Categoría</th>
+            <th class="px-3 py-2 border-b border-gray-700">Centro</th>
+            <th class="px-3 py-2 border-b border-gray-700">Notas</th>
+            <th class="px-3 py-2 border-b border-gray-700">Última Modificación</th>
+            <th class="px-3 py-2 border-b border-gray-700">Acciones</th>
+          </tr>
+        </thead>
+        <tbody class="text-gray-200">
+          {% for item in records %}
+          <tr class="border-b border-gray-700 hover:bg-gray-800" data-record-id="{{ item.record.id }}">
+            <td class="px-2 py-2 text-center mark-cell"></td>
+            <td class="px-3 py-2">{{ item.record.user.username }}</td>
+            <td class="px-3 py-2 whitespace-nowrap">{{ item.record.date.strftime("%d-%m-%Y") }}</td>
+            <td class="px-3 py-2 whitespace-nowrap">{{ item.record.check_in.strftime("%H:%M:%S") if item.record.check_in else '-' }}</td>
+            <td class="px-3 py-2 whitespace-nowrap">{{ item.record.check_out.strftime("%H:%M:%S") if item.record.check_out else '-' }}</td>
+            <td class="px-3 py-2 whitespace-nowrap">{{ item.duration_formatted }}</td>
+            <td class="px-3 py-2 whitespace-nowrap">
+              {% if item.is_over %}
+                <span class="text-red-500">●</span> -{{ item.remaining }}
+              {% else %}
+                <span class="text-green-500">●</span> {{ item.remaining }}
+              {% endif %}
+            </td>
+            <td class="px-3 py-2">{{ item.record.user.categoria or '-' }}</td>
+            <td class="px-3 py-2">{{ item.record.user.centro or '-' }}</td>
+            <td class="px-3 py-2">{{ item.record.notes or '' }}</td>
+            <td class="px-3 py-2 whitespace-nowrap">{{ item.record.updated_at.strftime("%d-%m-%Y %H:%M:%S") if item.record.updated_at else '-' }}</td>
+            <td class="px-3 py-2 whitespace-nowrap">
+              <div class="flex items-center gap-2">
+                <a href="{{ url_for('admin.edit_record', record_id=item.record.id, page=page) }}"
+                   class="bg-fuchsia-800 hover:bg-fuchsia-700 text-white px-2.5 py-1 rounded text-xs edit-link">Editar</a>
+                <form action="{{ url_for('admin.delete_record', record_id=item.record.id) }}"
+                      method="POST" class="inline"
+                      onsubmit="return confirm('¿Seguro que deseas eliminar este registro?');">
+                  <button type="submit"
+                          class="bg-red-800 hover:bg-red-700 text-white px-2.5 py-1 rounded text-xs">Eliminar</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="12" class="px-3 py-3 border-b border-gray-700 text-center text-gray-500">
+              No hay registros para mostrar.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+</section>
 {% endblock %}

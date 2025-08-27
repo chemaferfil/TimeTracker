@@ -26,16 +26,21 @@ app = Flask(
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 
 # Configuración de la base de datos
-uri = os.getenv("DATABASE_URL")
-
-if not uri:
-    print("DATABASE_URL no está definido — usando SQLite local.", file=sys.stderr)
-    basedir = os.path.abspath(os.path.dirname(__file__))
-    uri = 'sqlite:///' + os.path.join(basedir, 'timetracker.db')
-else:
-    uri = uri.replace("postgres://", "postgresql://")  # Compatibilidad con Render
-
+# Forzamos el uso de la BD de Render para las pruebas locales (según tu petición)
+render_dsn = (
+    "postgresql://timetracker_db_ntuk_user:"
+    "iRlZxk7xdpA38AMYOIOZMt2lsyL1ST8l@"
+    "dpg-d2h0c78dl3ps73fq6s80-a.oregon-postgres.render.com:5432/"
+    "timetracker_db_ntuk?sslmode=require"
+)
+uri = os.getenv("RENDER_DATABASE_URL") or os.getenv("DATABASE_URL")
+# Si la URI no existe o apunta a MySQL, forzamos la de Render
+if not uri or uri.lower().startswith("mysql"):
+    uri = render_dsn
+# Normalizar si viniera como postgres://
+uri = uri.replace("postgres://", "postgresql://")
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
+print("Usando BD:", app.config['SQLALCHEMY_DATABASE_URI'], file=sys.stderr)
 
 # Configure SQLAlchemy engine options based on environment
 is_production = os.getenv('DYNO') or os.getenv('RENDER')
@@ -58,7 +63,50 @@ else:
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Inicializar extensiones
 db.init_app(app)
+# Log rápido del driver efectivo
+try:
+    with app.app_context():
+        print("Driver:", db.engine.url.drivername, file=sys.stderr)
+except Exception:
+    pass
+# Log de diagnóstico por request para confirmar motor/URL
+@app.before_request
+def _log_db_on_request():
+    try:
+        from flask import request
+        print(f"[REQ] {request.method} {request.path} -> engine={db.engine.url.drivername} url={db.engine.url}", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"[REQ] engine-info error: {e}", file=sys.stderr, flush=True)
+
 migrate = Migrate(app, db)
+
+# Context processor para hacer disponible el usuario actual y saludo
+@app.context_processor
+def inject_user():
+    from flask import session
+    from models.models import User
+    from datetime import datetime
+
+    user = None
+    greeting = ""
+
+    user_id = session.get("user_id")
+    if user_id:
+        user = User.query.get(user_id)
+        if user:
+            # Obtener solo el primer nombre
+            first_name = user.full_name.split()[0] if user.full_name else user.username
+
+            # Determinar saludo según la hora
+            hour = datetime.now().hour
+            if 6 <= hour < 12:
+                greeting = f"Buenos días, {first_name}"
+            elif 12 <= hour < 20:
+                greeting = f"Buenas tardes, {first_name}"
+            else:
+                greeting = f"Buenas noches, {first_name}"
+
+    return dict(current_user=user, greeting=greeting)
 
 # Registrar blueprints
 app.register_blueprint(auth_bp)
@@ -75,8 +123,20 @@ def init_db():
     """Initialize database tables and run migrations"""
     with app.app_context():
         from models.models import User, TimeRecord
-        migrate_upgrade()
-        db.create_all()
+        # Si estamos en SQLite local, evita correr migraciones de Alembic
+        try:
+            driver = db.engine.url.drivername
+        except Exception:
+            driver = None
+
+        if driver and driver.startswith("sqlite"):
+            db.create_all()
+            return
+
+        # Para motores no-SQLite (p.ej., Postgres con datos reales), no tocar el esquema
+        # para evitar problemas de dependencias o drivers en local. Asumimos que la BD ya
+        # está provisionada (como la de Render descargada).
+        return
 
 if __name__ == '__main__':
     # Solo inicializar la base de datos cuando se ejecuta directamente (no con gunicorn)

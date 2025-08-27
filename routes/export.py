@@ -197,9 +197,18 @@ def export_excel():
         )
 
     # GET
-    users = User.query.filter_by(is_active=True).order_by(User.username).all()
+    from routes.admin import get_admin_centro
+    centro_admin = get_admin_centro()
+    q = User.query.filter_by(is_active=True)
+    if centro_admin:
+        q = q.filter(User.centro == centro_admin)
+    users = q.order_by(User.username).all()
+
+    # Calcular lista de horas únicas y ordenadas ascendentemente para el desplegable "horas4"
+    horas_sorted = sorted({u.weekly_hours for u in users if u.weekly_hours is not None})
+
     today = date.today().strftime('%Y-%m-%d')
-    return render_template("export_excel.html", users=users, today=today)
+    return render_template("export_excel.html", users=users, today=today, centro_admin=centro_admin, horas_sorted=horas_sorted)
 
 # ========== EXCEL DIARIO ==========
 

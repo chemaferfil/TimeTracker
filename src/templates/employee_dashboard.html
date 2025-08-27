@@ -55,6 +55,7 @@
       <h3 class="text-xl font-medium mb-4 text-miss-sushi-pink">Estado Actual</h3>
       {% if today_record %}
         <p class="mb-2 text-yellow-400">¡Tienes una sesión de fichaje abierta!</p>
+        <p class="mb-1"><strong>Centro:</strong> {{ user.centro or '-' }}</p>
         <p class="mb-1">
           <strong>Entrada:</strong>
           {{ today_record.check_in.strftime("%d-%m-%Y %H:%M:%S") }}

@@ -7,17 +7,20 @@
     <form method="POST" action="{{ url_for('export.export_excel') }}">
     <!-- Globo 1: Filtros rápidos por ubicación -->
     <div class="bg-gray-800 rounded-lg p-6 mb-8">
-        <form method="POST" action="{{ url_for('export.export_excel') }}">
         <!-- Fila 1: Centro + Usuario + Botón -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4 items-end">
             <div class="text-center">
                 <label for="centro1" class="block text-gray-400 text-sm font-bold mb-2">Centro</label>
                 <select id="centro1" name="centro1" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
-                    <option value="">Todos</option>
-                    <option value="Avenida de Brasil">Avenida de Brasil</option>
-                    <option value="Hortaleza">Hortaleza</option>
-                    <option value="Las Tablas">Las Tablas</option>
-                    <option value="Majadahonda">Majadahonda</option>
+                    {% if session.get('is_admin') and centro_admin %}
+                        <option value="{{ centro_admin }}" selected>{{ centro_admin }}</option>
+                    {% else %}
+                        <option value="">Todos</option>
+                        <option value="Avenida de Brasil">Avenida de Brasil</option>
+                        <option value="Hortaleza">Hortaleza</option>
+                        <option value="Las Tablas">Las Tablas</option>
+                        <option value="Majadahonda">Majadahonda</option>
+                    {% endif %}
                 </select>
             </div>
             <div class="text-center flex gap-2 items-end">
@@ -38,11 +41,15 @@
             <div class="text-center">
                 <label for="centro2" class="block text-gray-400 text-sm font-bold mb-2">Centro</label>
                 <select id="centro2" name="centro2" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
-                    <option value="">Todos</option>
-                    <option value="Avenida de Brasil">Avenida de Brasil</option>
-                    <option value="Hortaleza">Hortaleza</option>
-                    <option value="Las Tablas">Las Tablas</option>
-                    <option value="Majadahonda">Majadahonda</option>
+                    {% if session.get('is_admin') and centro_admin %}
+                        <option value="{{ centro_admin }}" selected>{{ centro_admin }}</option>
+                    {% else %}
+                        <option value="">Todos</option>
+                        <option value="Avenida de Brasil">Avenida de Brasil</option>
+                        <option value="Hortaleza">Hortaleza</option>
+                        <option value="Las Tablas">Las Tablas</option>
+                        <option value="Majadahonda">Majadahonda</option>
+                    {% endif %}
                 </select>
             </div>
             <div class="text-center flex gap-2 items-end">
@@ -63,11 +70,15 @@
             <div class="text-center">
                 <label for="centro3" class="block text-gray-400 text-sm font-bold mb-2">Centro</label>
                 <select id="centro3" name="centro3" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
-                    <option value="">Todos</option>
-                    <option value="Avenida de Brasil">Avenida de Brasil</option>
-                    <option value="Hortaleza">Hortaleza</option>
-                    <option value="Las Tablas">Las Tablas</option>
-                    <option value="Majadahonda">Majadahonda</option>
+                    {% if session.get('is_admin') and centro_admin %}
+                        <option value="{{ centro_admin }}" selected>{{ centro_admin }}</option>
+                    {% else %}
+                        <option value="">Todos</option>
+                        <option value="Avenida de Brasil">Avenida de Brasil</option>
+                        <option value="Hortaleza">Hortaleza</option>
+                        <option value="Las Tablas">Las Tablas</option>
+                        <option value="Majadahonda">Majadahonda</option>
+                    {% endif %}
                 </select>
             </div>
             <div class="text-center flex gap-2 items-end">
@@ -91,11 +102,15 @@
             <div class="text-center">
                 <label for="centro4" class="block text-gray-400 text-sm font-bold mb-2">Centro</label>
                 <select id="centro4" name="centro4" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
-                    <option value="">Todos</option>
-                    <option value="Avenida de Brasil">Avenida de Brasil</option>
-                    <option value="Hortaleza">Hortaleza</option>
-                    <option value="Las Tablas">Las Tablas</option>
-                    <option value="Majadahonda">Majadahonda</option>
+                    {% if session.get('is_admin') and centro_admin %}
+                        <option value="{{ centro_admin }}" selected>{{ centro_admin }}</option>
+                    {% else %}
+                        <option value="">Todos</option>
+                        <option value="Avenida de Brasil">Avenida de Brasil</option>
+                        <option value="Hortaleza">Hortaleza</option>
+                        <option value="Las Tablas">Las Tablas</option>
+                        <option value="Majadahonda">Majadahonda</option>
+                    {% endif %}
                 </select>
                 <button type="submit" name="excel_solo_centro" value="1"
                         class="mt-2 w-full h-10 px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
@@ -133,12 +148,8 @@
                 <label for="horas4" class="block text-gray-400 text-sm font-bold mb-2">Horas de trabajo</label>
                 <select id="horas4" name="horas4" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
                     <option value="">Todas</option>
-                    {% set horas_unicas = [] %}
-                    {% for user in users %}
-                        {% if user.weekly_hours and user.weekly_hours not in horas_unicas %}
-                            <option value="{{ user.weekly_hours }}">{{ user.weekly_hours }}</option>
-                            {% set _ = horas_unicas.append(user.weekly_hours) %}
-                        {% endif %}
+                    {% for h in horas_sorted %}
+                        <option value="{{ h }}">{{ h }}</option>
                     {% endfor %}
                 </select>
                 <button type="submit" name="excel_solo_horas" value="1"

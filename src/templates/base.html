@@ -42,16 +42,25 @@
       font-size: 0.875rem;
       font-weight: 500;
     }
+    /* Alinear el borde superior de sidebar y topbar */
+    #sidebar { margin-top: 0; }
   </style>
 </head>
 
 <body class="bg-black font-sans text-gray-100">
   <div class="flex min-h-screen">
+    <style>
+      /* Corrige salto visual entre sidebar y topbar en escritorio */
+      @media (min-width: 768px) {
+        #sidebar { position: sticky; top: 0; align-self: flex-start; }
+      }
+    </style>
+
 
     {% if session.get('is_admin') %}
     <!-- Sidebar -->
     <aside id="sidebar" class="hidden md:flex flex-col w-56 bg-gray-900 text-sushi-100 flex-shrink-0 fixed md:static z-20 h-full md:h-auto">
-      <div class="px-6 py-5 font-brand text-xl text-center border-b border-gray-700">Menú</div>
+      <div class="px-6 py-3 font-brand text-xl text-center border-b border-gray-700">Menú</div>
       <nav class="mt-4 flex flex-col gap-1 px-2">
         {% set links = [
           {'endpoint': 'admin.dashboard',    'label': 'Dashboard'},
@@ -94,25 +103,35 @@
         </div>
 
         <div class="flex items-center gap-4">
-          <button id="btn-theme-toggle" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700" aria-label="Toggle dark mode">
-            <svg id="icon-light" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 3v1m0 16v1m8.66-8.66h-1M4.34 12.34h-1m15.36 5.3l-.7-.7M6.34 6.34l-.7-.7m15.36 0l-.7.7M6.34 17.66l-.7.7"/>
-            </svg>
-            <svg id="icon-dark" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 3C8.134 3 5 6.134 5 10c0 3.866 3.134 7 7 7s7-3.134 7-7c0-3.866-3.134-7-7-7z"/>
-            </svg>
-          </button>
+          {% if greeting %}
+            <span class="text-gray-600 dark:text-gray-300 font-medium text-sm">
+              {{ greeting }}
+            </span>
+          {% endif %}
           <a href="{{ url_for('auth.logout') }}" class="text-sushi-600 hover:text-sushi-500 font-medium text-sm">
             Cerrar Sesión
           </a>
         </div>
       </header>
 
-      <!-- Eliminado: div espaciador que añadía aire extra
-      <div class="p-4"></div>
-      -->
+      {% block flashes %}
+      <!-- Flash messages (global) -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div id="global-flashes" class="px-4 pt-3">
+            {% for category, message in messages %}
+              <div class="mb-3 p-3 rounded text-sm border transition-opacity duration-500
+                          {% if category == 'danger' %} bg-red-900 text-red-200 border-red-700
+                          {% elif category == 'success' %} bg-green-900 text-green-200 border-green-700
+                          {% elif category == 'warning' %} bg-yellow-900 text-yellow-200 border-yellow-700
+                          {% else %} bg-blue-900 text-blue-200 border-blue-700 {% endif %}">
+                {{ message }}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+      {% endblock %}
 
       <main class="flex-1 p-2 overflow-auto">
         {% block content %}{% endblock %}
@@ -121,15 +140,6 @@
   </div>
 
   <script>
-    // Tema oscuro toggle
-    const btnTheme = document.getElementById('btn-theme-toggle');
-    const htmlEl = document.documentElement;
-    btnTheme.addEventListener('click', () => {
-      htmlEl.classList.toggle('dark');
-      document.getElementById('icon-light').classList.toggle('hidden');
-      document.getElementById('icon-dark').classList.toggle('hidden');
-    });
-
     // Toggle sidebar en móvil
     const btnSidebar = document.getElementById('btn-sidebar-toggle');
     if (btnSidebar) {
@@ -137,6 +147,16 @@
       btnSidebar.addEventListener('click', () => {
         aside.classList.toggle('hidden');
       });
+    }
+
+    // Auto-desvanecido de flashes globales tras 3s
+    const flashes = document.getElementById('global-flashes');
+    if (flashes) {
+      setTimeout(() => {
+        flashes.style.transition = 'opacity 0.6s ease';
+        flashes.style.opacity = '0';
+        setTimeout(() => flashes.remove(), 800);
+      }, 3000);
     }
   </script>
 </body>

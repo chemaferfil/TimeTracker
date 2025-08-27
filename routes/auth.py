@@ -10,12 +10,29 @@ def login():
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
-        user = User.query.filter_by(username=username).first()
+        try:
+            # Debug: imprimir motor y URL efectiva (forzamos flush)
+            from sqlalchemy import text
+            print("[LOGIN] engine:", db.engine.url.drivername, "url:", str(db.engine.url), flush=True)
+            # Probar una consulta trivial a Postgres para forzar el bind real
+            db.session.execute(text("SELECT 1"))
+            print("[LOGIN] SELECT 1 ok", flush=True)
+        except Exception as e:
+            print("[LOGIN] connection-test error:", e, flush=True)
+        try:
+            user = User.query.filter_by(username=username).first()
+        except Exception as e:
+            # Registrar detalles del engine si la query falla
+            try:
+                print("[LOGIN] on-query engine:", db.engine.url.drivername, "url:", str(db.engine.url), flush=True)
+            except Exception:
+                pass
+            raise
 
         if user and user.check_password(password):
             session["user_id"] = user.id
             session["is_admin"] = user.is_admin
-            flash("Inicio de sesión exitoso.", "success")
+            # No mostramos flash de "Inicio de sesión exitoso" para evitar mensajes residuales
             if user.is_admin:
                 return redirect(url_for("admin.dashboard"))
             else:
@@ -31,6 +48,8 @@ def login():
 def logout():
     session.pop("user_id", None)
     session.pop("is_admin", None)
+    # Asegurar que no queden flashes anteriores (p.ej., "inicio de sesión exitoso")
+    session.pop("_flashes", None)
     flash("Has cerrado sesión.", "info")
     return redirect(url_for("auth.login"))
 

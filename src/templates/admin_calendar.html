@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}Calendario de Registros{% endblock %}
-{% block header %}Calendario de estado de empleados{% endblock %}
+{% block header %}Calendario{% endblock %}
 
 {% block extra_head %}
   <!-- FullCalendar -->
@@ -14,87 +14,93 @@
 {% endblock %}
 
 {% block content %}
+<!-- Sección de Filtros -->
 <section class="bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+    <!-- ----------------  FILTROS  ---------------- -->
+    <form id="calendar-filters" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-4">
+      <!-- Centro -->
+      <div>
+        <label for="centro" class="block text-sm mb-1">Centro</label>
+        <select id="centro" name="centro"
+                class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700">
+          {% if centro_admin %}
+            <option value="{{ centro_admin }}" selected>{{ centro_admin }}</option>
+          {% else %}
+            <option value="">Todos</option>
+            <option value="Avenida de Brasil">Avenida de Brasil</option>
+            <option value="Hortaleza">Hortaleza</option>
+            <option value="Las Tablas">Las Tablas</option>
+            <option value="Majadahonda">Majadahonda</option>
+          {% endif %}
+        </select>
+      </div>
 
-  <!-- ----------------  FILTROS  ---------------- -->
-  <form id="calendar-filters" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-4">
-    <!-- Centro -->
-    <div>
-      <label for="centro" class="block text-sm mb-1">Centro</label>
-      <select id="centro" name="centro"
-              class="w-full px-2 py-1 rounded bg-gray-700 text-white">
-        <option value="">Todos</option>
-        <option value="Avenida de Brasil">Avenida de Brasil</option>
-        <option value="Hortaleza">Hortaleza</option>
-        <option value="Las Tablas">Las Tablas</option>
-        <option value="Majadahonda">Majadahonda</option>
-      </select>
-    </div>
+      <!-- Usuario -->
+      <div>
+        <label for="user" class="block text-sm mb-1">Usuario</label>
+        <select id="user" name="user_id"
+                class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700">
+          <option value="">Todos</option>
+        </select>
+      </div>
 
-    <!-- Usuario -->
-    <div>
-      <label for="user" class="block text-sm mb-1">Usuario</label>
-      <select id="user" name="user_id"
-              class="w-full px-2 py-1 rounded bg-gray-700 text-white">
-        <option value="">Todos</option>
-      </select>
-    </div>
+      <!-- Desde / Hasta -->
+      <div>
+        <label for="start" class="block text-sm mb-1">Desde</label>
+        <input type="date" id="start" name="start"
+               class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700">
+      </div>
 
-    <!-- Desde / Hasta -->
-    <div>
-      <label for="start" class="block text-sm mb-1">Desde</label>
-      <input type="date" id="start" name="start"
-             class="w-full px-2 py-1 rounded bg-gray-700 text-white">
-    </div>
+      <div>
+        <label for="end" class="block text-sm mb-1">Hasta</label>
+        <input type="date" id="end" name="end"
+               class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700">
+      </div>
 
-    <div>
-      <label for="end" class="block text-sm mb-1">Hasta</label>
-      <input type="date" id="end" name="end"
-             class="w-full px-2 py-1 rounded bg-gray-700 text-white">
-    </div>
+      <!-- Botones -->
+      <div class="md:col-span-4 flex flex-wrap gap-2 mt-2 items-center">
+        <button type="submit"
+                class="bg-fuchsia-700 hover:bg-fuchsia-800 px-6 py-2 rounded text-white">
+          Filtrar
+        </button>
+        <button type="button" id="reset-filters"
+                class="bg-gray-700 hover:bg-gray-600 px-6 py-2 rounded text-white">
+          Limpiar
+        </button>
 
-    <!-- Botones -->
-    <div class="md:col-span-4 flex flex-wrap gap-2 mt-2 items-center">
-      <button type="submit"
-              class="bg-fuchsia-700 hover:bg-fuchsia-800 px-6 py-2 rounded text-white">
-        Filtrar
-      </button>
-      <button type="button" id="reset-filters"
-              class="bg-gray-700 hover:bg-gray-600 px-6 py-2 rounded text-white">
-        Limpiar
-      </button>
+        <!-- BOTÓN FICHA USUARIO -->
+        <a id="open-ficha" href="#" target="_blank"
+           class="ml-auto bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded text-white flex items-center gap-1 hidden">
+           📅 Ficha
+        </a>
+      </div>
 
-      <!-- BOTÓN FICHA USUARIO -->
-      <a id="open-ficha" href="#" target="_blank"
-         class="ml-auto bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded text-white flex items-center gap-1 hidden">
-         📅 Ficha
-      </a>
-    </div>
+      <!-- Checkboxes de Estado -->
+      <div class="md:col-span-4 flex flex-wrap gap-4 mt-4 text-sm">
+        <label class="inline-flex items-center gap-1">
+          <input type="checkbox" class="status-filter" value="Trabajado" checked>
+          <span class="text-blue-400">Trabajado</span>
+        </label>
+        <label class="inline-flex items-center gap-1">
+          <input type="checkbox" class="status-filter" value="Baja" checked>
+          <span class="text-red-400">Baja</span>
+        </label>
+        <label class="inline-flex items-center gap-1">
+          <input type="checkbox" class="status-filter" value="Ausente" checked>
+          <span class="text-yellow-400">Ausente</span>
+        </label>
+        <label class="inline-flex items-center gap-1">
+          <input type="checkbox" class="status-filter" value="Vacaciones" checked>
+          <span class="text-green-400">Vacaciones</span>
+        </label>
+      </div>
+    </form>
+</section>
 
-    <!-- Checkboxes de Estado -->
-    <div class="md:col-span-4 flex flex-wrap gap-4 mt-4 text-sm">
-      <label class="inline-flex items-center gap-1">
-        <input type="checkbox" class="status-filter" value="Trabajado" checked>
-        <span class="text-blue-400">Trabajado</span>
-      </label>
-      <label class="inline-flex items-center gap-1">
-        <input type="checkbox" class="status-filter" value="Baja" checked>
-        <span class="text-red-400">Baja</span>
-      </label>
-      <label class="inline-flex items-center gap-1">
-        <input type="checkbox" class="status-filter" value="Ausente" checked>
-        <span class="text-yellow-400">Ausente</span>
-      </label>
-      <label class="inline-flex items-center gap-1">
-        <input type="checkbox" class="status-filter" value="Vacaciones" checked>
-        <span class="text-green-400">Vacaciones</span>
-      </label>
-    </div>
-  </form>
-
+<!-- Sección del Calendario -->
+<section class="bg-gray-900 shadow-md rounded-lg p-6">
   <!-- ----------------  CALENDARIO  ---------------- -->
   <div id="employee-calendar"></div>
-
 </section>
 
 <script>
