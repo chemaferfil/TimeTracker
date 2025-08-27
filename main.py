@@ -1,5 +1,6 @@
 import eventlet
-eventlet.monkey_patch()
+# More conservative monkey patching to avoid threading issues
+eventlet.monkey_patch(socket=True, select=True, thread=False)
 import os
 import sys
 
@@ -45,12 +46,15 @@ print("Usando BD:", app.config['SQLALCHEMY_DATABASE_URI'], file=sys.stderr)
 # Configure SQLAlchemy engine options based on environment
 is_production = os.getenv('DYNO') or os.getenv('RENDER')
 if is_production:
-    # Production environment with eventlet - use NullPool
+    # Production environment with eventlet - use NullPool and fix eventlet issues
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         "pool_pre_ping": True,
         "pool_recycle": 300,
-        # NullPool doesn't support pool_timeout or max_overflow
-        "poolclass": NullPool
+        "poolclass": NullPool,
+        # Fix eventlet concurrency issues
+        "connect_args": {
+            "options": "-c default_transaction_isolation=SERIALIZABLE"
+        } if uri.startswith('postgresql') else {}
     }
 else:
     # Development environment - use default pooling
@@ -79,6 +83,14 @@ def _log_db_on_request():
         print(f"[REQ] engine-info error: {e}", file=sys.stderr, flush=True)
 
 migrate = Migrate(app, db)
+
+# Fix for eventlet threading issues
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    try:
+        db.session.remove()
+    except Exception:
+        pass
 
 # Context processor para hacer disponible el usuario actual y saludo
 @app.context_processor
