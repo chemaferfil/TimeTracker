@@ -1,9 +1,7 @@
 # gunicorn.conf.py
-import eventlet
-eventlet.monkey_patch()
 
 bind = "0.0.0.0:$PORT"
-worker_class = "eventlet"
+worker_class = "sync"
 workers = 1
 timeout = 120
 keepalive = 2
