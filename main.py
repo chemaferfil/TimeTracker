@@ -145,7 +145,9 @@ if __name__ == '__main__':
     # Solo inicializar la base de datos cuando se ejecuta directamente (no con gunicorn)
     init_db()
     port = int(os.getenv('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    # En producción usar debug=False
+    debug_mode = not (os.getenv('DYNO') or os.getenv('RENDER'))
+    app.run(host='0.0.0.0', port=port, debug=debug_mode)
 else:
     # Cuando se ejecuta con gunicorn, inicializar la base de datos después de crear la app
     init_db()
