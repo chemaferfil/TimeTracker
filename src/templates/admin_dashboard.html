@@ -3,7 +3,7 @@
 {% block header %}<span class="text-miss-sushi-pink">Panel de Administración</span>{% endblock %}
 
 {% block content %}
-<section class="bg-gray-800 shadow-md rounded-lg p-4 mb-6 -ml-2 md:-ml-4">
+<section class="bg-gray-800 shadow-md rounded-lg p-6 mb-6">
   <div class="mb-3">
     <span class="font-semibold text-lg text-gray-200">Resumen Rápido</span>
     <div class="flex flex-row gap-2 mt-2">
@@ -33,9 +33,35 @@
       <span class="text-xs uppercase tracking-wide text-gray-200 mt-1">Usuarios<br/>activos</span>
     </div>
   </div>
+
+  <!-- Filtros -->
+  <form method="get" action="{{ url_for('admin.dashboard') }}" class="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+    <div>
+      <label class="block text-xs text-gray-300 mb-1">Centro</label>
+      <select name="centro" class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700">
+        <option value="">Todos</option>
+        {% for c in centros %}
+          <option value="{{ c }}" {{ 'selected' if request.args.get('centro') == c else '' }}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs text-gray-300 mb-1">Categoría</label>
+      <select name="categoria" class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700">
+        <option value="">Todas</option>
+        {% for cat in categorias %}
+          <option value="{{ cat }}" {{ 'selected' if request.args.get('categoria') == cat else '' }}>{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="px-4 py-2 bg-fuchsia-800 hover:bg-fuchsia-700 text-white rounded">Aplicar</button>
+      <a href="{{ url_for('admin.dashboard') }}" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Limpiar</a>
+    </div>
+  </form>
 </section>
 
-<section class="bg-gray-900 shadow-md rounded-lg p-4 overflow-hidden -ml-2 md:-ml-4">
+<section class="bg-gray-900 shadow-md rounded-lg p-6 overflow-hidden">
   <h2 class="font-semibold text-lg mb-3 text-gray-200">Últimos Registros de Fichaje</h2>
 
   <div class="overflow-x-auto">

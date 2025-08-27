@@ -30,6 +30,36 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# Centro del admin actual (None implica super admin con acceso global)
+
+def get_admin_centro():
+    uid = session.get("user_id")
+    if not uid:
+        return None
+    u = User.query.get(uid)
+    # Considerar "-- Sin categoría --" como sin centro (super admin)
+    if u and u.is_admin and u.centro and u.centro != "-- Sin categoría --":
+        return u.centro
+    return None
+
+# Helpers de permisos
+
+def _current_user():
+    uid = session.get("user_id")
+    return User.query.get(uid) if uid else None
+
+def is_super_admin_user(u: User | None):
+    return bool(u and u.is_admin and (not u.centro or u.centro == "-- Sin categoría --"))
+
+def can_grant_admin():
+    u = _current_user()
+    # Permitidos explícitos + cualquier super admin actual
+    return bool(is_super_admin_user(u) or (u and u.username in ("Valle", "aDmin")))
+
+def can_grant_super_admin():
+    # Solo un super admin actual puede otorgar super admin
+    return is_super_admin_user(_current_user())
+
 def format_timedelta(td):
     if td is None:
         return "-"
@@ -44,19 +74,42 @@ def format_timedelta(td):
 @admin_bp.route("/dashboard")
 @admin_required
 def dashboard():
-    total_users = User.query.filter_by(is_admin=False).count()
-    active_users = (
+    # Centro del admin (None => super admin con acceso global)
+    centro_admin = get_admin_centro()
+
+    # Filtros opcionales
+    filtro_centro = request.args.get("centro", type=str, default="")
+    filtro_categoria = request.args.get("categoria", type=str, default="")
+
+    # Totales de usuarios (limitados por centro si aplica)
+    user_q = User.query.filter_by(is_admin=False)
+    if centro_admin:
+        user_q = user_q.filter(User.centro == centro_admin)
+    elif filtro_centro:
+        user_q = user_q.filter(User.centro == filtro_centro)
+    if filtro_categoria:
+        user_q = user_q.filter(User.categoria == filtro_categoria)
+    total_users = user_q.count()
+
+    # Usuarios activos con fichaje abierto (limitados por centro si aplica)
+    active_q = (
         db.session.query(TimeRecord.user_id)
+        .join(User, TimeRecord.user_id == User.id)
         .filter(TimeRecord.check_in.isnot(None), TimeRecord.check_out.is_(None))
-        .distinct()
-        .count()
     )
+    if centro_admin:
+        active_q = active_q.filter(User.centro == centro_admin)
+    elif filtro_centro:
+        active_q = active_q.filter(User.centro == filtro_centro)
+    if filtro_categoria:
+        active_q = active_q.filter(User.categoria == filtro_categoria)
+    active_users = active_q.distinct().count()
 
     today = date.today()
     start_of_week = today - timedelta(days=today.weekday())
     end_of_week = start_of_week + timedelta(days=6)
 
-    records = (
+    q = (
         TimeRecord.query
         .join(User, TimeRecord.user_id == User.id)
         .filter(
@@ -64,9 +117,15 @@ def dashboard():
             TimeRecord.date <= end_of_week,
             User.is_admin == False
         )
-        .order_by(TimeRecord.date.asc(), TimeRecord.check_in.asc())
-        .all()
     )
+    if centro_admin:
+        q = q.filter(User.centro == centro_admin)
+    elif filtro_centro:
+        q = q.filter(User.centro == filtro_centro)
+    if filtro_categoria:
+        q = q.filter(User.categoria == filtro_categoria)
+
+    records = q.order_by(TimeRecord.date.asc(), TimeRecord.check_in.asc()).all()
 
     week_acc, records_with_accum = {}, []
     for rec in records:
@@ -89,11 +148,24 @@ def dashboard():
 
     records_with_accum.reverse()
 
+    # Opciones dinámicas de centros y categorías (limitadas por centro del admin si aplica)
+    centros_q = User.query
+    if centro_admin:
+        centros_q = centros_q.filter(User.centro == centro_admin)
+    centros = [c[0] for c in centros_q.with_entities(User.centro).filter(User.centro.isnot(None)).distinct().order_by(User.centro).all()]
+
+    categorias_q = User.query
+    if centro_admin:
+        categorias_q = categorias_q.filter(User.centro == centro_admin)
+    categorias = [c[0] for c in categorias_q.with_entities(User.categoria).filter(User.categoria.isnot(None)).distinct().order_by(User.categoria).all()]
+
     return render_template(
         "admin_dashboard.html",
         user_count=total_users,
         active_user_count=active_users,
-        recent_records=records_with_accum
+        recent_records=records_with_accum,
+        centros=centros,
+        categorias=categorias
     )
 
 # --------------------------------------------------------------------
@@ -102,8 +174,34 @@ def dashboard():
 @admin_bp.route("/users")
 @admin_required
 def manage_users():
-    users = User.query.order_by(User.username).all()
-    return render_template("manage_users.html", users=users)
+    centro_admin = get_admin_centro()
+
+    # Filtros opcionales
+    filtro_centro = request.args.get("centro", type=str, default="")
+    filtro_categoria = request.args.get("categoria", type=str, default="")
+
+    q = User.query
+    if centro_admin:
+        q = q.filter(User.centro == centro_admin)
+    elif filtro_centro:
+        q = q.filter(User.centro == filtro_centro)
+    if filtro_categoria:
+        q = q.filter(User.categoria == filtro_categoria)
+
+    users = q.order_by(User.username).all()
+
+    # Opciones dinámicas de centros y categorías (limitadas por centro del admin si aplica)
+    centros_q = User.query
+    if centro_admin:
+        centros_q = centros_q.filter(User.centro == centro_admin)
+    centros = [c[0] for c in centros_q.with_entities(User.centro).filter(User.centro.isnot(None)).distinct().order_by(User.centro).all()]
+
+    categorias_q = User.query
+    if centro_admin:
+        categorias_q = categorias_q.filter(User.centro == centro_admin)
+    categorias = [c[0] for c in categorias_q.with_entities(User.categoria).filter(User.categoria.isnot(None)).distinct().order_by(User.categoria).all()]
+
+    return render_template("manage_users.html", users=users, centros=centros, categorias=categorias, centro_admin=centro_admin)
 
 @admin_bp.route("/users/add", methods=["GET", "POST"])
 @admin_required
@@ -113,20 +211,29 @@ def add_user():
         password      = request.form.get("password")
         full_name     = request.form.get("full_name")
         email         = request.form.get("email")
-        is_admin      = request.form.get("is_admin") == "on"
+        # Solo algunos usuarios pueden crear administradores/super admin
+        req_is_admin  = request.form.get("is_admin") == "on"
         weekly_hours  = request.form.get("weekly_hours", type=int)
         centro        = request.form.get("centro") or None
         categoria     = request.form.get("categoria") or None
+        # Super admin: centro vacío o "-- Sin categoría --"
+        req_is_super  = (centro in (None, "-- Sin categoría --"))
+        is_admin      = req_is_admin if can_grant_admin() else False
+        if req_is_super and not can_grant_super_admin():
+            # Si no puede conceder super admin, forzamos un centro válido
+            if centro in (None, "-- Sin categoría --"):
+                centro = "-- Sin categoría --"  # permitido como valor, pero no super admin salvo privilegio
+        # Nota: ser super admin depende de is_admin y del centro especial (None/"-- Sin categoría --")
 
         if not all([username, password, full_name, email]) or weekly_hours is None:
             flash("Todos los campos son obligatorios.", "danger")
             return render_template("user_form.html", user=None, action="add",
-                                   form_data=request.form)
+                                   form_data=request.form, centro_admin=get_admin_centro())
 
         if User.query.filter((User.username == username) | (User.email == email)).first():
             flash("El nombre de usuario o el correo electrónico ya existen.", "danger")
             return render_template("user_form.html", user=None, action="add",
-                                   form_data=request.form)
+                                   form_data=request.form, centro_admin=get_admin_centro())
 
         new_user = User(
             username      = username,
@@ -145,7 +252,7 @@ def add_user():
         flash("Usuario creado correctamente.", "success")
         return redirect(url_for("admin.manage_users"))
 
-    return render_template("user_form.html", user=None, action="add")
+    return render_template("user_form.html", user=None, action="add", centro_admin=get_admin_centro())
 
 @admin_bp.route("/users/edit/<int:user_id>", methods=["GET", "POST"])
 @admin_required
@@ -160,6 +267,12 @@ def edit_user(user_id):
             flash("No puedes cambiar tus propios permisos.", "danger")
             return redirect(url_for("admin.edit_user", user_id=user_id))
 
+        # Si el que edita no tiene permiso de conceder admin, ignorar cambios a is_admin
+        requested_is_admin = (request.form.get("is_admin") == "on")
+        if can_grant_admin():
+            user.is_admin = requested_is_admin
+        # Si no, se respeta el estado actual de user.is_admin sin cambios
+
         # username / email (únicos)
         new_username = request.form.get("username").strip()
         new_email    = request.form.get("email").strip()
@@ -168,12 +281,12 @@ def edit_user(user_id):
            User.query.filter(User.username == new_username, User.id != user.id).first():
             flash("El nuevo nombre de usuario ya existe.", "danger")
             return render_template("user_form.html", user=user, action="edit",
-                                   form_data=request.form)
+                                   form_data=request.form, centro_admin=get_admin_centro())
         if new_email != user.email and \
            User.query.filter(User.email == new_email, User.id != user.id).first():
             flash("El nuevo correo electrónico ya existe.", "danger")
             return render_template("user_form.html", user=user, action="edit",
-                                   form_data=request.form)
+                                   form_data=request.form, centro_admin=get_admin_centro())
 
         # campos simples
         user.username      = new_username
@@ -195,7 +308,7 @@ def edit_user(user_id):
         flash("Usuario actualizado.", "success")
         return redirect(url_for("admin.manage_users"))
 
-    return render_template("user_form.html", user=user, action="edit")
+    return render_template("user_form.html", user=user, action="edit", centro_admin=get_admin_centro())
 
 @admin_bp.route("/users/delete/<int:user_id>", methods=["POST"])
 @admin_required
@@ -242,10 +355,26 @@ def manage_records():
 
     # Calcular número de semana ISO y rango de días
     week_number = start_of_week.isocalendar().week
-    week_range = f"{start_of_week.day} - {end_of_week.day} de {start_of_week.strftime('%B').capitalize()}"
 
-    # Buscar registros solo de esa semana
-    recs = (
+    # Nombres de meses en español
+    meses_es = {
+        1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
+        5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
+        9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+    }
+    mes_nombre = meses_es[start_of_week.month]
+    week_range = f"{start_of_week.day} - {end_of_week.day} de {mes_nombre}"
+
+    # Filtros por query params (fecha, hora, categoría y centro)
+    date_from = request.args.get("date_from")
+    date_to   = request.args.get("date_to")
+    time_from = request.args.get("time_from")  # HH:MM
+    time_to   = request.args.get("time_to")    # HH:MM
+    categoria = request.args.get("categoria")
+    filtro_centro = request.args.get("centro", type=str, default="")
+
+    # Buscar registros solo de esa semana + filtros
+    q = (
         TimeRecord.query
         .join(User, TimeRecord.user_id == User.id)
         .filter(
@@ -254,9 +383,48 @@ def manage_records():
             User.is_admin == False,
             TimeRecord.check_out.isnot(None)
         )
-        .order_by(TimeRecord.user_id, TimeRecord.date.asc(), TimeRecord.check_in.asc())
-        .all()
     )
+
+    # Scope por centro del admin, si aplica. Si es super admin, permitir filtro por centro
+    centro_admin = get_admin_centro()
+    if centro_admin:
+        q = q.filter(User.centro == centro_admin)
+    elif filtro_centro:
+        q = q.filter(User.centro == filtro_centro)
+
+    # Aplicar filtros opcionales (fechas)
+    ci_from = co_to = None
+    try:
+        if date_from:
+            df = datetime.strptime(date_from, "%Y-%m-%d").date()
+            q = q.filter(TimeRecord.date >= df)
+        if date_to:
+            dt = datetime.strptime(date_to, "%Y-%m-%d").date()
+            q = q.filter(TimeRecord.date <= dt)
+        if time_from:
+            ci_from = datetime.strptime(time_from, "%H:%M").time()
+        if time_to:
+            co_to = datetime.strptime(time_to, "%H:%M").time()
+    except ValueError:
+        flash("Formato de fecha/hora inválido en filtros.", "warning")
+
+    if categoria:
+        q = q.filter(User.categoria == categoria)
+
+    recs = q.order_by(TimeRecord.user_id, TimeRecord.date.asc(), TimeRecord.check_in.asc()).all()
+
+    # Filtrar por horas en Python para compatibilidad con SQLite/Postgres
+    if ci_from or co_to:
+        filtered = []
+        for r in recs:
+            ok = True
+            if ci_from and (not r.check_in or r.check_in.time() < ci_from):
+                ok = False
+            if co_to and (not r.check_out or r.check_out.time() > co_to):
+                ok = False
+            if ok:
+                filtered.append(r)
+        recs = filtered
 
     # Lógica de acumulados (igual que antes)
     weekly_acc = {}
@@ -300,6 +468,12 @@ def manage_records():
     # Calcular si es la semana actual
     is_current_week = (start_of_week == start_of_current)
 
+    # Opciones dinámicas de centros para el select
+    centros_q = User.query
+    if centro_admin:
+        centros_q = centros_q.filter(User.centro == centro_admin)
+    centros = [c[0] for c in centros_q.with_entities(User.centro).filter(User.centro.isnot(None)).distinct().order_by(User.centro).all()]
+
     return render_template(
         "manage_records.html",
         records=enriched,
@@ -307,7 +481,9 @@ def manage_records():
         has_next=has_next,
         week_number=week_number,
         week_range=week_range,
-        is_current_week=is_current_week
+        is_current_week=is_current_week,
+        centros=centros,
+        centro_admin=centro_admin
     )
 
 @admin_bp.route("/records/edit/<int:record_id>", methods=["GET", "POST"])
@@ -355,7 +531,8 @@ def delete_record(record_id):
 @admin_bp.route("/calendar")
 @admin_required
 def admin_calendar():
-    return render_template("admin_calendar.html")
+    # Pasamos el centro del admin (None => super admin)
+    return render_template("admin_calendar.html", centro_admin=get_admin_centro())
 
 @admin_bp.route("/api/events")
 @admin_required
@@ -389,6 +566,14 @@ def api_events():
 
     q = EmployeeStatus.query.join(User).filter(User.is_admin == False)
 
+    # Scope por centro del admin (si tiene asignado)
+    centro_admin = get_admin_centro()
+    if centro_admin:
+        q = q.filter(User.centro == centro_admin)
+    elif centro:
+        # Si no hay centro del admin, permitir filtrar por parámetro opcional
+        q = q.filter(User.centro == centro)
+
     if user_id:
         q = q.filter(EmployeeStatus.user_id == user_id)
     if start_date:
@@ -397,8 +582,6 @@ def api_events():
         q = q.filter(EmployeeStatus.date <= end_date)
     if status:
         q = q.filter(EmployeeStatus.status == status)
-    if centro:
-        q = q.filter(User.centro == centro)
 
     events = [
         {
@@ -427,10 +610,14 @@ def api_events():
 def api_employees():
     centro = request.args.get("centro")
     query = User.query.filter_by(is_admin=False)
-    
-    if centro:
+
+    # Limitar por centro del admin, si aplica (super admin => None)
+    centro_admin = get_admin_centro()
+    if centro_admin:
+        query = query.filter(User.centro == centro_admin)
+    elif centro:
         query = query.filter(User.centro == centro)
-    
+
     employees = query.order_by(User.full_name).all()
     return jsonify([
         {"id": u.id, "username": u.username, "full_name": u.full_name}
@@ -442,8 +629,13 @@ def api_employees():
 def api_centro_info():
     centro = request.args.get("centro")
     users = User.query.filter_by(is_admin=False)
-    if centro:
+
+    centro_admin = get_admin_centro()
+    if centro_admin:
+        users = users.filter(User.centro == centro_admin)
+    elif centro:
         users = users.filter(User.centro == centro)
+
     users = users.all()
     categorias = sorted(set(u.categoria for u in users if u.categoria))
     horas = sorted(set(u.weekly_hours for u in users if u.weekly_hours is not None))
@@ -538,12 +730,20 @@ def edit_employee_status(user_id, status_id):
 @admin_bp.route("/open_records", methods=["GET", "POST"])
 @admin_required
 def open_records():
-    open_records = (
+    # Limitar por centro del admin si aplica y excluir admins
+    centro_admin = get_admin_centro()
+    q = (
         TimeRecord.query
         .join(User, TimeRecord.user_id == User.id)
-        .filter(TimeRecord.check_in.isnot(None), TimeRecord.check_out.is_(None))
-        .all()
+        .filter(
+            TimeRecord.check_in.isnot(None),
+            TimeRecord.check_out.is_(None),
+            User.is_admin == False
+        )
     )
+    if centro_admin:
+        q = q.filter(User.centro == centro_admin)
+    open_records = q.all()
 
     if request.method == "POST":
         record_id = request.form.get("record_id")
