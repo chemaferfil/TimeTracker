@@ -774,6 +774,8 @@ def close_today_records():
             flash(f"Se cerraron automáticamente {closed_count} registros abiertos de hoy.", "success")
         else:
             flash("No hay registros abiertos para cerrar hoy.", "info")
+    except ImportError:
+        flash("La funcionalidad de cierre automático no está disponible.", "warning")
     except Exception as e:
         flash(f"Error al cerrar registros: {str(e)}", "danger")
     

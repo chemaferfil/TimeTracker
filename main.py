@@ -11,9 +11,14 @@ from routes.auth import auth_bp
 from routes.time import time_bp
 from routes.admin import admin_bp
 from routes.export import export_bp
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
-import atexit
+try:
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from apscheduler.triggers.cron import CronTrigger
+    import atexit
+    SCHEDULER_AVAILABLE = True
+except ImportError as e:
+    print(f"APScheduler not available: {e}", file=sys.stderr)
+    SCHEDULER_AVAILABLE = False
 
 # Crear instancia de la app Flask
 app = Flask(
@@ -146,25 +151,33 @@ def init_db():
 
 def init_scheduler():
     """Initialize the background scheduler for automatic tasks"""
-    scheduler = BackgroundScheduler(daemon=True)
-    
-    # Import the task function
-    from tasks.scheduler import auto_close_open_records
-    
-    # Schedule the auto-close task to run daily at 23:59:59
-    scheduler.add_job(
-        func=auto_close_open_records,
-        trigger=CronTrigger(hour=23, minute=59, second=59),
-        id='auto_close_records',
-        name='Auto-close open time records',
-        replace_existing=True
-    )
-    
-    scheduler.start()
-    app.logger.info("Scheduler initialized - Auto-close task scheduled for 23:59:59 daily")
-    
-    # Shut down the scheduler when exiting the app
-    atexit.register(lambda: scheduler.shutdown())
+    if not SCHEDULER_AVAILABLE:
+        app.logger.warning("APScheduler not available - automatic closing disabled")
+        return
+        
+    try:
+        scheduler = BackgroundScheduler(daemon=True)
+        
+        # Import the task function
+        from tasks.scheduler import auto_close_open_records
+        
+        # Schedule the auto-close task to run daily at 23:59:59
+        scheduler.add_job(
+            func=auto_close_open_records,
+            trigger=CronTrigger(hour=23, minute=59, second=59),
+            id='auto_close_records',
+            name='Auto-close open time records',
+            replace_existing=True
+        )
+        
+        scheduler.start()
+        app.logger.info("Scheduler initialized - Auto-close task scheduled for 23:59:59 daily")
+        
+        # Shut down the scheduler when exiting the app
+        atexit.register(lambda: scheduler.shutdown())
+    except Exception as e:
+        app.logger.error(f"Failed to initialize scheduler: {e}")
+        app.logger.warning("Automatic closing disabled due to scheduler error")
 
 if __name__ == '__main__':
     # Solo inicializar la base de datos cuando se ejecuta directamente (no con gunicorn)
