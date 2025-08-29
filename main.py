@@ -11,6 +11,9 @@ from routes.auth import auth_bp
 from routes.time import time_bp
 from routes.admin import admin_bp
 from routes.export import export_bp
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+import atexit
 
 # Crear instancia de la app Flask
 app = Flask(
@@ -141,9 +144,32 @@ def init_db():
         # está provisionada (como la de Render descargada).
         return
 
+def init_scheduler():
+    """Initialize the background scheduler for automatic tasks"""
+    scheduler = BackgroundScheduler(daemon=True)
+    
+    # Import the task function
+    from tasks.scheduler import auto_close_open_records
+    
+    # Schedule the auto-close task to run daily at 23:59:59
+    scheduler.add_job(
+        func=auto_close_open_records,
+        trigger=CronTrigger(hour=23, minute=59, second=59),
+        id='auto_close_records',
+        name='Auto-close open time records',
+        replace_existing=True
+    )
+    
+    scheduler.start()
+    app.logger.info("Scheduler initialized - Auto-close task scheduled for 23:59:59 daily")
+    
+    # Shut down the scheduler when exiting the app
+    atexit.register(lambda: scheduler.shutdown())
+
 if __name__ == '__main__':
     # Solo inicializar la base de datos cuando se ejecuta directamente (no con gunicorn)
     init_db()
+    init_scheduler()
     port = int(os.getenv('PORT', 5000))
     # En producción usar debug=False
     debug_mode = not (os.getenv('DYNO') or os.getenv('RENDER'))
@@ -151,3 +177,4 @@ if __name__ == '__main__':
 else:
     # Cuando se ejecuta con gunicorn, inicializar la base de datos después de crear la app
     init_db()
+    init_scheduler()

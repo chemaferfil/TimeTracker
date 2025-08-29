@@ -4,7 +4,18 @@
 {% block content %}
 
 <section class="bg-gray-800 p-6 rounded shadow mt-6">
-  <h2 class="text-lg font-bold text-white mb-4">Fichajes abiertos</h2>
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-lg font-bold text-white">Fichajes abiertos</h2>
+    {% if open_records %}
+    <form method="POST" action="{{ url_for('admin.close_today_records') }}" class="inline">
+      <button type="submit" 
+              onclick="return confirm('¿Estás seguro de que quieres cerrar automáticamente todos los fichajes abiertos de hoy a las 23:59:59?')"
+              class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm">
+        🕐 Cerrar todos automáticamente
+      </button>
+    </form>
+    {% endif %}
+  </div>
   {% if open_records %}
     <table class="min-w-full text-white mb-4">
     <thead>

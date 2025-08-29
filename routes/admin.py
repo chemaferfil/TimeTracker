@@ -759,3 +759,22 @@ def open_records():
         return redirect(url_for("admin.open_records"))
 
     return render_template("open_records.html", open_records=open_records)
+
+# --------------------------------------------------------------------
+#  CIERRE AUTOMÁTICO MANUAL
+# --------------------------------------------------------------------
+@admin_bp.route("/close_today_records", methods=["POST"])
+@admin_required
+def close_today_records():
+    """Manual trigger to close all open records for today"""
+    try:
+        from tasks.scheduler import manual_auto_close_records
+        closed_count = manual_auto_close_records()
+        if closed_count > 0:
+            flash(f"Se cerraron automáticamente {closed_count} registros abiertos de hoy.", "success")
+        else:
+            flash("No hay registros abiertos para cerrar hoy.", "info")
+    except Exception as e:
+        flash(f"Error al cerrar registros: {str(e)}", "danger")
+    
+    return redirect(url_for("admin.open_records"))
