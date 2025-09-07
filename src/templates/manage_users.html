@@ -14,7 +14,7 @@
   </div>
 
   <!-- Filtros -->
-  <form method="get" action="{{ url_for('admin.manage_users') }}" class="mb-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+  <form method="get" action="{{ url_for('admin.manage_users') }}" class="mb-4 grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
     <div>
       <label class="block text-xs text-gray-300 mb-1">Centro</label>
       <select name="centro" class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700">
@@ -32,6 +32,14 @@
           <option value="{{ cat }}" {{ 'selected' if request.args.get('categoria') == cat else '' }}>{{ cat }}</option>
         {% endfor %}
       </select>
+    </div>
+    <div>
+      <label class="block text-xs text-gray-300 mb-1">Buscar Usuario</label>
+      <input type="text" 
+             name="search" 
+             value="{{ request.args.get('search', '') }}"
+             placeholder="Nombre o apellido..."
+             class="w-full px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-fuchsia-800">
     </div>
     <div class="flex gap-2">
       <button type="submit" class="px-4 py-2 bg-fuchsia-800 hover:bg-fuchsia-700 text-white rounded">Aplicar</button>
@@ -53,6 +61,8 @@
                   <th class="px-4 py-2 text-left">Horas/Sem</th>
                   <th class="px-4 py-2 text-left">Categoría</th>
                   <th class="px-4 py-2 text-left">Centro</th>
+                  <th class="px-4 py-2 text-left">Fecha Alta</th>
+                  <th class="px-4 py-2 text-left">Fecha Baja</th>
                   <th class="px-4 py-2 text-left">Acciones</th>
               </tr>
           </thead>
@@ -67,6 +77,8 @@
                   <td class="px-3 py-2 whitespace-nowrap text-center text-gray-100">{{ user.weekly_hours }}</td>
                   <td class="px-3 py-2 whitespace-nowrap text-gray-100">{{ user.categoria or '-'}}</td>
                   <td class="px-3 py-2 whitespace-nowrap text-gray-100">{{ user.centro or '-'}}</td>
+                  <td class="px-3 py-2 whitespace-nowrap text-gray-100">{{ user.hire_date.strftime('%d/%m/%Y') if user.hire_date else '-' }}</td>
+                  <td class="px-3 py-2 whitespace-nowrap text-gray-100">{{ user.termination_date.strftime('%d/%m/%Y') if user.termination_date else '-' }}</td>
                   <td class="px-3 py-2 whitespace-nowrap">
                       <div class="flex items-center gap-2">
                           <a href="{{ url_for('admin.edit_user', user_id=user.id) }}"
@@ -90,7 +102,7 @@
               </tr>
               {% else %}
               <tr>
-                  <td colspan="8" class="px-4 py-3 text-center text-gray-500">No hay usuarios registrados.</td>
+                  <td colspan="10" class="px-4 py-3 text-center text-gray-500">No hay usuarios registrados.</td>
               </tr>
               {% endfor %}
           </tbody>

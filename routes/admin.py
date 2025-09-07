@@ -179,6 +179,7 @@ def manage_users():
     # Filtros opcionales
     filtro_centro = request.args.get("centro", type=str, default="")
     filtro_categoria = request.args.get("categoria", type=str, default="")
+    search_query = request.args.get("search", type=str, default="")
 
     q = User.query
     if centro_admin:
@@ -187,6 +188,9 @@ def manage_users():
         q = q.filter(User.centro == filtro_centro)
     if filtro_categoria:
         q = q.filter(User.categoria == filtro_categoria)
+    if search_query:
+        # Buscar en nombre completo (nombre y apellidos)
+        q = q.filter(User.full_name.ilike(f"%{search_query}%"))
 
     users = q.order_by(User.username).all()
 
@@ -216,6 +220,21 @@ def add_user():
         weekly_hours  = request.form.get("weekly_hours", type=int)
         centro        = request.form.get("centro") or None
         categoria     = request.form.get("categoria") or None
+        hire_date_str = request.form.get("hire_date")
+        termination_date_str = request.form.get("termination_date")
+        
+        # Convertir fechas si están presentes
+        hire_date = None
+        termination_date = None
+        try:
+            if hire_date_str:
+                hire_date = datetime.strptime(hire_date_str, "%Y-%m-%d").date()
+            if termination_date_str:
+                termination_date = datetime.strptime(termination_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            flash("Formato de fecha inválido.", "danger")
+            return render_template("user_form.html", user=None, action="add",
+                                   form_data=request.form, centro_admin=get_admin_centro())
         # Super admin: centro vacío o "-- Sin categoría --"
         req_is_super  = (centro in (None, "-- Sin categoría --"))
         is_admin      = req_is_admin if can_grant_admin() else False
@@ -236,14 +255,16 @@ def add_user():
                                    form_data=request.form, centro_admin=get_admin_centro())
 
         new_user = User(
-            username      = username,
-            full_name     = full_name,
-            email         = email,
-            is_admin      = is_admin,
-            is_active     = True,
-            weekly_hours  = weekly_hours,
-            centro        = centro,
-            categoria     = categoria
+            username         = username,
+            full_name        = full_name,
+            email            = email,
+            is_admin         = is_admin,
+            is_active        = True,
+            weekly_hours     = weekly_hours,
+            centro           = centro,
+            categoria        = categoria,
+            hire_date        = hire_date,
+            termination_date = termination_date
         )
         new_user.set_password(password)
         db.session.add(new_user)
@@ -295,6 +316,18 @@ def edit_user(user_id):
         user.weekly_hours  = request.form.get("weekly_hours", type=int)
         user.centro        = request.form.get("centro") or None
         user.categoria     = request.form.get("categoria") or None
+        
+        # Fechas de alta y baja
+        hire_date_str = request.form.get("hire_date")
+        termination_date_str = request.form.get("termination_date")
+        
+        try:
+            user.hire_date = datetime.strptime(hire_date_str, "%Y-%m-%d").date() if hire_date_str else None
+            user.termination_date = datetime.strptime(termination_date_str, "%Y-%m-%d").date() if termination_date_str else None
+        except ValueError:
+            flash("Formato de fecha inválido.", "danger")
+            return render_template("user_form.html", user=user, action="edit",
+                                   form_data=request.form, centro_admin=get_admin_centro())
 
         if user.id != session.get("user_id"):
             user.is_admin  = request.form.get("is_admin")  == "on"

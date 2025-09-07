@@ -83,6 +83,32 @@
                    class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink">
         </div>
 
+        <!-- Fechas de Alta y Baja -->
+        <div class="mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="hire_date" class="block text-sm font-medium text-gray-300 mb-1">
+                        Fecha de alta
+                    </label>
+                    <input type="date"
+                           id="hire_date"
+                           name="hire_date"
+                           value="{{ form_data.hire_date if form_data else (user.hire_date if user else '') }}"
+                           class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink">
+                </div>
+                <div>
+                    <label for="termination_date" class="block text-sm font-medium text-gray-300 mb-1">
+                        Fecha de baja
+                    </label>
+                    <input type="date"
+                           id="termination_date"
+                           name="termination_date"
+                           value="{{ form_data.termination_date if form_data else (user.termination_date if user else '') }}"
+                           class="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-gray-100 focus:outline-none focus:ring-2 focus:ring-miss-sushi-pink">
+                </div>
+            </div>
+        </div>
+
         <!-- Centro / Super admin -->
         <div class="mb-4">
             <label for="centro" class="block text-sm font-medium text-gray-300 mb-1">

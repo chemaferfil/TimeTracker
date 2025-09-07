@@ -25,6 +25,8 @@ class User(db.Model):
         ),
         nullable=True
     )
+    hire_date = db.Column(db.Date, nullable=True)
+    termination_date = db.Column(db.Date, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     time_records = db.relationship(

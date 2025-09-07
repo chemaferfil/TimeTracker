@@ -8,8 +8,8 @@
     <!-- Globo 1: Filtros rápidos por ubicación -->
     <div class="bg-gray-800 rounded-lg p-6 mb-8">
         <!-- Fila 1: Centro + Usuario + Botón -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4 items-end">
-            <div class="text-center">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4 items-end">
+            <div class="col-span-3 text-center">
                 <label for="centro1" class="block text-gray-400 text-sm font-bold mb-2">Centro</label>
                 <select id="centro1" name="centro1" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
                     {% if session.get('is_admin') and centro_admin %}
@@ -23,22 +23,27 @@
                     {% endif %}
                 </select>
             </div>
-            <div class="text-center flex gap-2 items-end">
-                <div class="w-full">
-                    <label for="usuario1" class="block text-gray-400 text-sm font-bold mb-2">Usuario</label>
-                    <select id="usuario1" name="usuario1" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
-                        <option value="">Todos</option>
-                    </select>
-                </div>
+            <div class="col-span-5 text-center">
+                <label for="usuario1" class="block text-gray-400 text-sm font-bold mb-2">Usuario</label>
+                <select id="usuario1" name="usuario1" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="col-span-4 flex gap-2">
                 <button type="submit" name="excel_centro_usuario" value="1"
-                        class="h-10 min-w-[260px] px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
-                    Excel por Ubicación + Usuario
+                        class="h-10 flex-1 px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
+                    Ubicación + Usuario
+                </button>
+                <button type="submit" name="excel_centro_usuario" value="1"
+                        class="h-10 flex-1 px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold"
+                        formaction="{{ url_for('export.export_excel_monthly') }}">
+                    Mensual / Semanal
                 </button>
             </div>
         </div>
         <!-- Fila 2: Centro + Categoría + Botón -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4 items-end">
-            <div class="text-center">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4 items-end">
+            <div class="col-span-3 text-center">
                 <label for="centro2" class="block text-gray-400 text-sm font-bold mb-2">Centro</label>
                 <select id="centro2" name="centro2" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
                     {% if session.get('is_admin') and centro_admin %}
@@ -52,22 +57,26 @@
                     {% endif %}
                 </select>
             </div>
-            <div class="text-center flex gap-2 items-end">
-                <div class="w-full">
-                    <label for="categoria2" class="block text-gray-400 text-sm font-bold mb-2">Categoría</label>
-                    <select id="categoria2" name="categoria2" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
-                        <option value="">Todas</option>
-                    </select>
-                </div>
+            <div class="col-span-5 text-center">
+                <label for="categoria2" class="block text-gray-400 text-sm font-bold mb-2">Categoría</label>
+                <select id="categoria2" name="categoria2" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
+                    <option value="">Todas</option>
+                    <option value="Cocina">Cocina</option>
+                    <option value="Reparto">Reparto</option>
+                    <option value="Delivery">Delivery</option>
+                    <option value="Sala">Sala</option>
+                </select>
+            </div>
+            <div class="col-span-4 text-center">
                 <button type="submit" name="excel_centro_categoria" value="1"
-                        class="h-10 min-w-[260px] px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
-                    Excel por Ubicación + Categoría
+                        class="h-10 w-full px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
+                    Ubicación + Categoría
                 </button>
             </div>
         </div>
         <!-- Fila 3: Centro + Horas + Botón -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4 items-end">
-            <div class="text-center">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4 items-end">
+            <div class="col-span-3 text-center">
                 <label for="centro3" class="block text-gray-400 text-sm font-bold mb-2">Centro</label>
                 <select id="centro3" name="centro3" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
                     {% if session.get('is_admin') and centro_admin %}
@@ -81,16 +90,16 @@
                     {% endif %}
                 </select>
             </div>
-            <div class="text-center flex gap-2 items-end">
-                <div class="w-full">
-                    <label for="horas3" class="block text-gray-400 text-sm font-bold mb-2">Horas de trabajo</label>
-                    <select id="horas3" name="horas3" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
-                        <option value="">Todas</option>
-                    </select>
-                </div>
+            <div class="col-span-5 text-center">
+                <label for="horas3" class="block text-gray-400 text-sm font-bold mb-2">Horas de trabajo</label>
+                <select id="horas3" name="horas3" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 bg-gray-800 text-gray-300">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div class="col-span-4 text-center">
                 <button type="submit" name="excel_centro_horas" value="1"
-                        class="h-10 min-w-[260px] px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
-                    Excel por Ubicación + Horas
+                        class="h-10 w-full px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
+                    Ubicación + Horas
                 </button>
             </div>
         </div>
@@ -114,7 +123,7 @@
                 </select>
                 <button type="submit" name="excel_solo_centro" value="1"
                         class="mt-2 w-full h-10 px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
-                    Excel solo Centro
+                    Centro
                 </button>
             </div>
             <div class="text-center">
@@ -127,7 +136,7 @@
                 </select>
                 <button type="submit" name="excel_solo_usuario" value="1"
                         class="mt-2 w-full h-10 px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
-                    Excel solo Usuario
+                    Usuario
                 </button>
             </div>
             <div class="text-center">
@@ -141,7 +150,7 @@
                 </select>
                 <button type="submit" name="excel_solo_categoria" value="1"
                         class="mt-2 w-full h-10 px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
-                    Excel solo Categoría
+                    Categoría
                 </button>
             </div>
             <div class="text-center">
@@ -154,7 +163,7 @@
                 </select>
                 <button type="submit" name="excel_solo_horas" value="1"
                         class="mt-2 w-full h-10 px-4 py-2 bg-fuchsia-700 hover:bg-fuchsia-800 text-white text-sm rounded focus:outline-none font-semibold">
-                    Excel solo Horas
+                    Horas
                 </button>
             </div>
         </div>
@@ -175,11 +184,11 @@
         <div class="flex flex-col md:flex-row justify-center items-center gap-4">
             <a href="{{ url_for('export.export_excel_daily') }}?fecha={{ today }}"
                class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow text-center block">
-               Descargar Excel Diario
+               Excel Diario
             </a>
             <a href="{{ url_for('export.export_pdf_daily') }}?fecha={{ today }}"
                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow text-center block">
-               Descargar PDF Diario
+               PDF Diario
             </a>
         </div>
         <!-- MODAL para advertencia de fechas -->
