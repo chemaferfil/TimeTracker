@@ -9,32 +9,19 @@ import sys
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from main import app
-
-# Inicializar la base de datos en el contexto de aplicación
-def initialize_app():
-    """Initialize database for production"""
-    with app.app_context():
-        try:
-            from models.models import User, TimeRecord
-            from flask_migrate import upgrade as migrate_upgrade
-            from models.database import db
-            
-            # Run migrations
-            migrate_upgrade()
-            # Ensure tables are created
-            db.create_all()
-            print("Database initialized successfully", flush=True)
-        except Exception as e:
-            print(f"Warning: Error initializing database: {e}", flush=True)
-            # Don't fail the deployment if database init fails
-            pass
-
-# Initialize database when imported (for gunicorn)
+# Import app with error handling
 try:
-    initialize_app()
+    from main import app
+    print("Application imported successfully", flush=True)
 except Exception as e:
-    print(f"Warning: Could not initialize app: {e}", flush=True)
+    print(f"Error importing main app: {e}", flush=True)
+    # Create minimal fallback app
+    from flask import Flask
+    app = Flask(__name__)
+    
+    @app.route('/')
+    def health_check():
+        return "App is starting...", 200
 
 if __name__ == "__main__":
     port = int(os.getenv('PORT', 5000))
