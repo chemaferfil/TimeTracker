@@ -1,8 +1,8 @@
 import os
 import sys
 
-# Para que 'from src...' funcione cuando ejecutes main.py desde /src
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+# Add current directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, render_template
 from models.database import db

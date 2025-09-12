@@ -6,8 +6,8 @@ eventlet.monkey_patch(thread=True, socket=True, select=True, time=True, os=True)
 import os
 import sys
 
-# Para que 'from src...' funcione cuando ejecutes main.py desde /src
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+# Add current directory to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from main import app
 
@@ -24,12 +24,17 @@ def initialize_app():
             migrate_upgrade()
             # Ensure tables are created
             db.create_all()
-            print("Database initialized successfully")
+            print("Database initialized successfully", flush=True)
         except Exception as e:
-            print(f"Error initializing database: {e}")
+            print(f"Warning: Error initializing database: {e}", flush=True)
+            # Don't fail the deployment if database init fails
+            pass
 
 # Initialize database when imported (for gunicorn)
-initialize_app()
+try:
+    initialize_app()
+except Exception as e:
+    print(f"Warning: Could not initialize app: {e}", flush=True)
 
 if __name__ == "__main__":
     port = int(os.getenv('PORT', 5000))
