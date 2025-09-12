@@ -189,8 +189,11 @@ def manage_users():
     if filtro_categoria:
         q = q.filter(User.categoria == filtro_categoria)
     if search_query:
-        # Buscar en nombre completo (nombre y apellidos)
-        q = q.filter(User.full_name.ilike(f"%{search_query}%"))
+        # Buscar en nombre completo (nombre y apellidos) y username
+        q = q.filter(
+            (User.full_name.ilike(f"%{search_query}%")) | 
+            (User.username.ilike(f"%{search_query}%"))
+        )
 
     users = q.order_by(User.username).all()
 
@@ -398,13 +401,14 @@ def manage_records():
     mes_nombre = meses_es[start_of_week.month]
     week_range = f"{start_of_week.day} - {end_of_week.day} de {mes_nombre}"
 
-    # Filtros por query params (fecha, hora, categoría y centro)
+    # Filtros por query params (fecha, hora, categoría, centro y búsqueda)
     date_from = request.args.get("date_from")
     date_to   = request.args.get("date_to")
     time_from = request.args.get("time_from")  # HH:MM
     time_to   = request.args.get("time_to")    # HH:MM
     categoria = request.args.get("categoria")
     filtro_centro = request.args.get("centro", type=str, default="")
+    search_query = request.args.get("search", type=str, default="")
 
     # Buscar registros solo de esa semana + filtros
     q = (
@@ -443,6 +447,13 @@ def manage_records():
 
     if categoria:
         q = q.filter(User.categoria == categoria)
+    
+    # Filtrar por búsqueda de nombre completo y username
+    if search_query:
+        q = q.filter(
+            (User.full_name.ilike(f"%{search_query}%")) | 
+            (User.username.ilike(f"%{search_query}%"))
+        )
 
     recs = q.order_by(TimeRecord.user_id, TimeRecord.date.asc(), TimeRecord.check_in.asc()).all()
 
