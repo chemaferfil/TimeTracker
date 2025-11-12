@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, send_file
 from functools import wraps
-from models.models import User, TimeRecord
+from models.models import User, TimeRecord, EmployeeStatus
 from models.database import db
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta, date
@@ -27,6 +27,23 @@ def admin_required(f):
             return redirect(url_for("auth.login"))
         return f(*args, **kwargs)
     return decorated_function
+
+
+def _status_notes_map(user_ids, start_date=None, end_date=None):
+    """Return {(user_id, date): notes} for EmployeeStatus rows in range."""
+    if not user_ids:
+        return {}
+
+    query = EmployeeStatus.query.filter(EmployeeStatus.user_id.in_(user_ids))
+    if start_date:
+        query = query.filter(EmployeeStatus.date >= start_date)
+    if end_date:
+        query = query.filter(EmployeeStatus.date <= end_date)
+
+    return {
+        (status.user_id, status.date): status.notes
+        for status in query.all()
+    }
 
 # ========== EXPORTACIÓN PRINCIPAL CON FILTROS ==========
 
@@ -136,6 +153,11 @@ def export_excel():
                 return redirect(url_for("export.export_excel"))
 
         records = query.order_by(TimeRecord.user_id, TimeRecord.date).all()
+        status_notes = _status_notes_map(
+            {record.user_id for record in records},
+            start_date,
+            end_date
+        )
 
         if not records:
             flash("No hay registros para el período y filtros seleccionados.", "warning")
@@ -147,7 +169,11 @@ def export_excel():
         ws = wb.active
         ws.title = "Registros de Fichaje"
 
-        header = ["Usuario", "Nombre completo", "Categoría", "Centro", "Fecha", "Entrada", "Salida", "Horas Trabajadas", "Notas", "Modificado Por", "Última Actualización"]
+        header = [
+            "Usuario", "Nombre completo", "Categoría", "Centro",
+            "Fecha", "Entrada", "Salida", "Horas Trabajadas",
+            "Notas", "Notas Admin", "Modificado Por", "Última Actualización"
+        ]
         for col_num, header_text in enumerate(header, 1):
             cell = ws.cell(row=1, column=col_num)
             cell.value = header_text
@@ -175,9 +201,12 @@ def export_excel():
             ws.cell(row=row_num, column=6).value = record.check_in.strftime("%H:%M:%S") if record.check_in else "-"
             ws.cell(row=row_num, column=7).value = record.check_out.strftime("%H:%M:%S") if record.check_out else "-"
             ws.cell(row=row_num, column=8).value = hours_worked
-            ws.cell(row=row_num, column=9).value = record.notes
-            ws.cell(row=row_num, column=10).value = modified_by.username if modified_by else "-"
-            ws.cell(row=row_num, column=11).value = record.updated_at.strftime("%d/%m/%Y %H:%M:%S")
+            ws.cell(row=row_num, column=9).value = record.notes or ""
+            ws.cell(row=row_num, column=10).value = status_notes.get(
+                (record.user_id, record.date), ""
+            ) or ""
+            ws.cell(row=row_num, column=11).value = modified_by.username if modified_by else "-"
+            ws.cell(row=row_num, column=12).value = record.updated_at.strftime("%d/%m/%Y %H:%M:%S")
             row_num += 1
 
         for col_num, _ in enumerate(header, 1):
@@ -298,6 +327,12 @@ def export_excel_monthly():
             flash("No hay registros para el período y filtros seleccionados.", "warning")
             return redirect(url_for("export.export_excel_monthly"))
 
+        status_notes = _status_notes_map(
+            {record.user_id for record in records},
+            start_date,
+            end_date
+        )
+
         # Usar la misma lógica de sumas semanales que ya tenemos implementada
         def get_week_start(date_obj):
             return date_obj - timedelta(days=date_obj.weekday())
@@ -318,7 +353,11 @@ def export_excel_monthly():
         ws = wb.active
         ws.title = "Registros Mensuales"
 
-        header = ["Usuario", "Nombre completo", "Categoría", "Centro", "Horas Semanales", "Fecha", "Entrada", "Salida", "Horas Trabajadas", "Diferencia Horas", "Notas", "Modificado Por", "Última Actualización"]
+        header = [
+            "Usuario", "Nombre completo", "Categoría", "Centro", "Horas Semanales",
+            "Fecha", "Entrada", "Salida", "Horas Trabajadas", "Diferencia Horas",
+            "Notas", "Notas Admin", "Modificado Por", "Última Actualización"
+        ]
         for col_num, header_text in enumerate(header, 1):
             cell = ws.cell(row=1, column=col_num)
             cell.value = header_text
@@ -384,7 +423,7 @@ def export_excel_monthly():
                 cell.alignment = Alignment(horizontal='center')
                 cell.fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
                 
-                for col in range(11, 14):
+                for col in range(11, 15):
                     cell = ws.cell(row=row_num, column=col)
                     cell.value = "-"
                     cell.alignment = Alignment(horizontal='center')
@@ -400,6 +439,7 @@ def export_excel_monthly():
                         time_diff = record.check_out - record.check_in
                         hours = time_diff.total_seconds() / 3600
                         hours_worked = f"{hours:.2f}"
+                    admin_note = status_notes.get((record.user_id, record.date), "") or ""
 
                     cell = ws.cell(row=row_num, column=1)
                     cell.value = user.username if user else f"ID: {record.user_id}"
@@ -442,14 +482,18 @@ def export_excel_monthly():
                     cell.alignment = Alignment(horizontal='center')
                     
                     cell = ws.cell(row=row_num, column=11)
-                    cell.value = record.notes
+                    cell.value = record.notes or ""
                     cell.alignment = Alignment(horizontal='center')
                     
                     cell = ws.cell(row=row_num, column=12)
-                    cell.value = modified_by.username if modified_by else "-"
+                    cell.value = admin_note
                     cell.alignment = Alignment(horizontal='center')
                     
                     cell = ws.cell(row=row_num, column=13)
+                    cell.value = modified_by.username if modified_by else "-"
+                    cell.alignment = Alignment(horizontal='center')
+                    
+                    cell = ws.cell(row=row_num, column=14)
                     cell.value = record.updated_at.strftime("%d/%m/%Y %H:%M:%S")
                     cell.alignment = Alignment(horizontal='center')
                     row_num += 1
@@ -509,10 +553,20 @@ def export_excel_daily():
         flash("No hay registros para ese día.", "warning")
         return redirect(url_for("export.export_excel"))
 
+    status_notes = _status_notes_map(
+        {record.user_id for record in records},
+        fecha,
+        fecha
+    )
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Registros diarios"
-    header = ["Usuario", "Nombre completo", "Categoría", "Centro", "Fecha", "Entrada", "Salida", "Horas Trabajadas", "Notas"]
+    header = [
+        "Usuario", "Nombre completo", "Categoría", "Centro",
+        "Fecha", "Entrada", "Salida", "Horas Trabajadas",
+        "Notas", "Notas Admin"
+    ]
     for col_num, header_text in enumerate(header, 1):
         cell = ws.cell(row=1, column=col_num)
         cell.value = header_text
@@ -536,7 +590,10 @@ def export_excel_daily():
         ws.cell(row=row_num, column=6).value = record.check_in.strftime("%H:%M:%S") if record.check_in else "-"
         ws.cell(row=row_num, column=7).value = record.check_out.strftime("%H:%M:%S") if record.check_out else "-"
         ws.cell(row=row_num, column=8).value = hours_worked
-        ws.cell(row=row_num, column=9).value = record.notes
+        ws.cell(row=row_num, column=9).value = record.notes or ""
+        ws.cell(row=row_num, column=10).value = status_notes.get(
+            (record.user_id, record.date), ""
+        ) or ""
         row_num += 1
 
     for col_num, _ in enumerate(header, 1):
@@ -574,14 +631,23 @@ def export_pdf_daily():
         flash("No hay registros para ese día.", "warning")
         return redirect(url_for("export.export_excel"))
 
+    status_notes = _status_notes_map(
+        {record.user_id for record in records},
+        fecha,
+        fecha
+    )
+
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.add_page()
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, f"Registros de fichaje del {fecha.strftime('%d/%m/%Y')}", ln=1, align="C")
 
     pdf.set_font("Arial", "B", 10)
-    header = ["Usuario", "Nombre completo", "Categoría", "Centro", "Entrada", "Salida", "Horas", "Notas"]
-    col_widths = [30, 40, 25, 30, 22, 22, 30, 55]
+    header = [
+        "Usuario", "Nombre completo", "Categoría", "Centro",
+        "Entrada", "Salida", "Horas", "Notas", "Notas Admin"
+    ]
+    col_widths = [28, 38, 24, 28, 20, 20, 24, 40, 40]
 
     for i, col_name in enumerate(header):
         pdf.cell(col_widths[i], 8, col_name, border=1, align="C")
@@ -604,7 +670,8 @@ def export_pdf_daily():
             record.check_in.strftime("%H:%M:%S") if record.check_in else "-",
             record.check_out.strftime("%H:%M:%S") if record.check_out else "-",
             hours_worked,
-            record.notes or ""
+            record.notes or "",
+            status_notes.get((record.user_id, record.date), "") or ""
         ]
         for i, item in enumerate(row):
             pdf.cell(col_widths[i], 8, str(item), border=1, align="C")
