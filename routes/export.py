@@ -253,8 +253,9 @@ def export_excel():
 
         header = [
             "Usuario", "Nombre completo", "Categoría", "Centro",
-            "Fecha", "Entrada", "Salida", "Horas Trabajadas",
-            "Notas", "Notas Admin", "Modificado Por", "Última Actualización"
+            "Fecha", "Entrada", "Salida", "Entrada Admin", "Salida Admin",
+            "Horas Trabajadas", "Notas", "Notas Admin", "Modificado Por",
+            "Última Actualización"
         ]
         for col_num, header_text in enumerate(header, 1):
             cell = ws.cell(row=1, column=col_num)
@@ -278,6 +279,11 @@ def export_excel():
                 hours = time_diff.total_seconds() / 3600
                 hours_worked = f"{hours:.2f}"
 
+            admin_entry, admin_exit = status_times.get(
+                (record.user_id, record.date),
+                (None, None),
+            )
+
             ws.cell(row=row_num, column=1).value = user.username if user else f"ID: {record.user_id}"
             ws.cell(row=row_num, column=2).value = user.full_name if user else "-"
             ws.cell(row=row_num, column=3).value = user.categoria if user and user.categoria else "-"
@@ -285,13 +291,15 @@ def export_excel():
             ws.cell(row=row_num, column=5).value = record.date.strftime("%d/%m/%Y")
             ws.cell(row=row_num, column=6).value = record.check_in.strftime("%H:%M:%S") if record.check_in else "-"
             ws.cell(row=row_num, column=7).value = record.check_out.strftime("%H:%M:%S") if record.check_out else "-"
-            ws.cell(row=row_num, column=8).value = hours_worked
-            ws.cell(row=row_num, column=9).value = record.notes or ""
-            ws.cell(row=row_num, column=10).value = status_notes.get(
+            ws.cell(row=row_num, column=8).value = admin_entry.strftime("%H:%M") if admin_entry else "-"
+            ws.cell(row=row_num, column=9).value = admin_exit.strftime("%H:%M") if admin_exit else "-"
+            ws.cell(row=row_num, column=10).value = hours_worked
+            ws.cell(row=row_num, column=11).value = record.notes or ""
+            ws.cell(row=row_num, column=12).value = status_notes.get(
                 (record.user_id, record.date), ""
             ) or ""
-            ws.cell(row=row_num, column=11).value = modified_by.username if modified_by else "-"
-            ws.cell(row=row_num, column=12).value = record.updated_at.strftime("%d/%m/%Y %H:%M:%S")
+            ws.cell(row=row_num, column=13).value = modified_by.username if modified_by else "-"
+            ws.cell(row=row_num, column=14).value = record.updated_at.strftime("%d/%m/%Y %H:%M:%S")
             row_num += 1
 
         for col_num, _ in enumerate(header, 1):
@@ -460,7 +468,8 @@ def export_excel_monthly():
 
         header = [
             "Usuario", "Nombre completo", "Categoría", "Centro", "Horas Semanales",
-            "Fecha", "Entrada", "Salida", "Horas Trabajadas", "Diferencia Horas",
+            "Fecha", "Entrada", "Salida", "Entrada Admin", "Salida Admin",
+            "Horas Trabajadas", "Diferencia Horas",
             "Notas", "Notas Admin", "Modificado Por", "Última Actualización"
         ]
         for col_num, header_text in enumerate(header, 1):
@@ -506,14 +515,14 @@ def export_excel_monthly():
                 cell.alignment = Alignment(horizontal='center')
                 cell.fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
                 
-                # Columnas 6, 7, 8: "-"
-                for col in range(6, 9):
+                # Columnas 6 a 10: "-"
+                for col in range(6, 11):
                     cell = ws.cell(row=row_num, column=col)
                     cell.value = "-"
                     cell.alignment = Alignment(horizontal='center')
                     cell.fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
                 
-                cell = ws.cell(row=row_num, column=9)
+                cell = ws.cell(row=row_num, column=11)
                 cell.value = f"{total_hours:.2f}"
                 cell.font = Font(bold=True)
                 cell.alignment = Alignment(horizontal='center')
@@ -522,13 +531,13 @@ def export_excel_monthly():
                 # Calcular diferencia
                 weekly_hours_contract = user.weekly_hours if user and user.weekly_hours else 0
                 difference = weekly_hours_contract - total_hours
-                cell = ws.cell(row=row_num, column=10)
+                cell = ws.cell(row=row_num, column=12)
                 cell.value = f"{difference:.2f}"
                 cell.font = Font(bold=True)
                 cell.alignment = Alignment(horizontal='center')
                 cell.fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
                 
-                for col in range(11, 15):
+                for col in range(13, 17):
                     cell = ws.cell(row=row_num, column=col)
                     cell.value = "-"
                     cell.alignment = Alignment(horizontal='center')
@@ -548,6 +557,10 @@ def export_excel_monthly():
                         hours = time_diff.total_seconds() / 3600
                         hours_worked = f"{hours:.2f}"
                     admin_note = status_notes.get((record.user_id, record.date), "") or ""
+                    admin_entry, admin_exit = status_times.get(
+                        (record.user_id, record.date),
+                        (None, None),
+                    )
 
                     cell = ws.cell(row=row_num, column=1)
                     cell.value = user.username if user else f"ID: {record.user_id}"
@@ -582,26 +595,34 @@ def export_excel_monthly():
                     cell.alignment = Alignment(horizontal='center')
                     
                     cell = ws.cell(row=row_num, column=9)
+                    cell.value = admin_entry.strftime("%H:%M") if admin_entry else "-"
+                    cell.alignment = Alignment(horizontal='center')
+
+                    cell = ws.cell(row=row_num, column=10)
+                    cell.value = admin_exit.strftime("%H:%M") if admin_exit else "-"
+                    cell.alignment = Alignment(horizontal='center')
+
+                    cell = ws.cell(row=row_num, column=11)
                     cell.value = hours_worked
                     cell.alignment = Alignment(horizontal='center')
-                    
-                    cell = ws.cell(row=row_num, column=10)
+
+                    cell = ws.cell(row=row_num, column=12)
                     cell.value = "-"
                     cell.alignment = Alignment(horizontal='center')
-                    
-                    cell = ws.cell(row=row_num, column=11)
+
+                    cell = ws.cell(row=row_num, column=13)
                     cell.value = record.notes or ""
                     cell.alignment = Alignment(horizontal='center')
-                    
-                    cell = ws.cell(row=row_num, column=12)
+
+                    cell = ws.cell(row=row_num, column=14)
                     cell.value = admin_note
                     cell.alignment = Alignment(horizontal='center')
-                    
-                    cell = ws.cell(row=row_num, column=13)
+
+                    cell = ws.cell(row=row_num, column=15)
                     cell.value = modified_by.username if modified_by else "-"
                     cell.alignment = Alignment(horizontal='center')
-                    
-                    cell = ws.cell(row=row_num, column=14)
+
+                    cell = ws.cell(row=row_num, column=16)
                     cell.value = record.updated_at.strftime("%d/%m/%Y %H:%M:%S")
                     cell.alignment = Alignment(horizontal='center')
                     row_num += 1
@@ -681,8 +702,8 @@ def export_excel_daily():
     ws.title = "Registros diarios"
     header = [
         "Usuario", "Nombre completo", "Categoría", "Centro",
-        "Fecha", "Entrada", "Salida", "Horas Trabajadas",
-        "Notas", "Notas Admin"
+        "Fecha", "Entrada", "Salida", "Entrada Admin", "Salida Admin",
+        "Horas Trabajadas", "Notas", "Notas Admin"
     ]
     for col_num, header_text in enumerate(header, 1):
         cell = ws.cell(row=1, column=col_num)
@@ -699,6 +720,11 @@ def export_excel_daily():
             hours = time_diff.total_seconds() / 3600
             hours_worked = f"{hours:.2f}"
 
+        admin_entry, admin_exit = status_times.get(
+            (record.user_id, record.date),
+            (None, None),
+        )
+
         ws.cell(row=row_num, column=1).value = user.username if user else f"ID: {record.user_id}"
         ws.cell(row=row_num, column=2).value = user.full_name if user else "-"
         ws.cell(row=row_num, column=3).value = user.categoria if user and user.categoria else "-"
@@ -706,9 +732,11 @@ def export_excel_daily():
         ws.cell(row=row_num, column=5).value = record.date.strftime("%d/%m/%Y")
         ws.cell(row=row_num, column=6).value = record.check_in.strftime("%H:%M:%S") if record.check_in else "-"
         ws.cell(row=row_num, column=7).value = record.check_out.strftime("%H:%M:%S") if record.check_out else "-"
-        ws.cell(row=row_num, column=8).value = hours_worked
-        ws.cell(row=row_num, column=9).value = record.notes or ""
-        ws.cell(row=row_num, column=10).value = status_notes.get(
+        ws.cell(row=row_num, column=8).value = admin_entry.strftime("%H:%M") if admin_entry else "-"
+        ws.cell(row=row_num, column=9).value = admin_exit.strftime("%H:%M") if admin_exit else "-"
+        ws.cell(row=row_num, column=10).value = hours_worked
+        ws.cell(row=row_num, column=11).value = record.notes or ""
+        ws.cell(row=row_num, column=12).value = status_notes.get(
             (record.user_id, record.date), ""
         ) or ""
         row_num += 1
@@ -771,9 +799,10 @@ def export_pdf_daily():
     pdf.set_font("Arial", "B", 10)
     header = [
         "Usuario", "Nombre completo", "Categoría", "Centro",
-        "Entrada", "Salida", "Horas", "Notas", "Notas Admin"
+        "Entrada", "Salida", "Entrada Admin", "Salida Admin",
+        "Horas", "Notas", "Notas Admin"
     ]
-    col_widths = [28, 38, 24, 28, 20, 20, 24, 40, 40]
+    col_widths = [24, 36, 22, 26, 18, 18, 18, 18, 22, 32, 32]
 
     for i, col_name in enumerate(header):
         pdf.cell(col_widths[i], 8, col_name, border=1, align="C")
@@ -788,6 +817,11 @@ def export_pdf_daily():
             hours = time_diff.total_seconds() / 3600
             hours_worked = f"{hours:.2f}"
 
+        admin_entry, admin_exit = status_times.get(
+            (record.user_id, record.date),
+            (None, None),
+        )
+
         row = [
             user.username if user else f"ID: {record.user_id}",
             user.full_name if user else "-",
@@ -795,6 +829,8 @@ def export_pdf_daily():
             user.centro if user and user.centro else "-",
             record.check_in.strftime("%H:%M:%S") if record.check_in else "-",
             record.check_out.strftime("%H:%M:%S") if record.check_out else "-",
+            admin_entry.strftime("%H:%M") if admin_entry else "-",
+            admin_exit.strftime("%H:%M") if admin_exit else "-",
             hours_worked,
             record.notes or "",
             status_notes.get((record.user_id, record.date), "") or ""
