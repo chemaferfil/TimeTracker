@@ -4,6 +4,7 @@ from models.models import User, TimeRecord, EmployeeStatus
 from models.database import db
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta, date
+from types import SimpleNamespace
 import os
 import tempfile
 import openpyxl
@@ -29,20 +30,82 @@ def admin_required(f):
     return decorated_function
 
 
-def _status_notes_map(user_ids, start_date=None, end_date=None):
-    """Return {(user_id, date): notes} for EmployeeStatus rows in range."""
-    if not user_ids:
-        return {}
+def _fetch_statuses(start_date, end_date, *, centro=None, user_id=None,
+                    categoria=None, weekly_hours=None):
+    """Return EmployeeStatus rows matching the provided filters."""
+    query = EmployeeStatus.query.join(User, EmployeeStatus.user_id == User.id)
+    query = query.filter(EmployeeStatus.date >= start_date)
+    query = query.filter(EmployeeStatus.date <= end_date)
 
-    query = EmployeeStatus.query.filter(EmployeeStatus.user_id.in_(user_ids))
-    if start_date:
-        query = query.filter(EmployeeStatus.date >= start_date)
-    if end_date:
-        query = query.filter(EmployeeStatus.date <= end_date)
+    if user_id:
+        query = query.filter(EmployeeStatus.user_id == user_id)
+    if centro:
+        query = query.filter(User.centro == centro)
+    if categoria:
+        query = query.filter(User.categoria == categoria)
+    if weekly_hours is not None:
+        query = query.filter(User.weekly_hours.isnot(None))
+        query = query.filter(db.cast(User.weekly_hours, db.Integer) == weekly_hours)
 
+    return query.all()
+
+
+def _status_notes_map(statuses):
+    """Return {(user_id, date): notes} for the provided EmployeeStatus rows."""
     return {
         (status.user_id, status.date): status.notes
-        for status in query.all()
+        for status in statuses
+    }
+
+
+def _combine_records_with_statuses(records, statuses):
+    """Append placeholder records for statuses without time records."""
+    combined = list(records)
+    existing_keys = {
+        (record.user_id, record.date)
+        for record in records
+    }
+
+    for status in statuses:
+        key = (status.user_id, status.date)
+        if key in existing_keys:
+            continue
+
+        combined.append(
+            SimpleNamespace(
+                user_id=status.user_id,
+                date=status.date,
+                check_in=None,
+                check_out=None,
+                notes=None,
+                modified_by=None,
+                updated_at=(
+                    status.updated_at
+                    or status.created_at
+                    or datetime.combine(status.date, datetime.min.time())
+                ),
+            )
+        )
+
+    combined.sort(
+        key=lambda record: (
+            record.user_id,
+            record.date,
+            record.check_in or datetime.min
+        )
+    )
+    return combined
+
+
+def _users_map(user_ids):
+    """Return {user_id: User} for the provided identifiers."""
+    filtered_ids = {uid for uid in user_ids if uid is not None}
+    if not filtered_ids:
+        return {}
+
+    return {
+        user.id: user
+        for user in User.query.filter(User.id.in_(filtered_ids)).all()
     }
 
 # ========== EXPORTACIÓN PRINCIPAL CON FILTROS ==========
@@ -127,6 +190,14 @@ def export_excel():
         print('weekly_hours:', weekly_hours)
         print('--------------------------')
 
+        weekly_hours_value = None
+        if weekly_hours:
+            try:
+                weekly_hours_value = int(weekly_hours)
+            except ValueError:
+                flash("La jornada debe ser numérica.", "danger")
+                return redirect(url_for("export.export_excel"))
+
         # JOIN explícito para evitar AmbiguousForeignKeysError
         query = TimeRecord.query.join(User, TimeRecord.user_id == User.id).filter(
             TimeRecord.date >= start_date,
@@ -143,25 +214,36 @@ def export_excel():
         if categoria:
             query = query.filter(User.categoria == categoria)
         # El filtro de horas solo si se selecciona una concreta
-        if weekly_hours:
-            try:
-                wh = int(weekly_hours)
-                query = query.filter(User.weekly_hours.isnot(None))
-                query = query.filter(db.cast(User.weekly_hours, db.Integer) == wh)
-            except ValueError:
-                flash("La jornada debe ser numérica.", "danger")
-                return redirect(url_for("export.export_excel"))
+        if weekly_hours_value is not None:
+            query = query.filter(User.weekly_hours.isnot(None))
+            query = query.filter(db.cast(User.weekly_hours, db.Integer) == weekly_hours_value)
 
         records = query.order_by(TimeRecord.user_id, TimeRecord.date).all()
-        status_notes = _status_notes_map(
-            {record.user_id for record in records},
+        statuses = _fetch_statuses(
             start_date,
-            end_date
+            end_date,
+            centro=centro,
+            user_id=user_id,
+            categoria=categoria,
+            weekly_hours=weekly_hours_value,
         )
-
+        status_notes = _status_notes_map(statuses)
+        records = _combine_records_with_statuses(records, statuses)
         if not records:
             flash("No hay registros para el período y filtros seleccionados.", "warning")
             return redirect(url_for("export.export_excel"))
+
+        users_cache = _users_map(
+            {
+                record.user_id
+                for record in records
+            }
+            | {
+                getattr(record, "modified_by", None)
+                for record in records
+                if getattr(record, "modified_by", None)
+            }
+        )
 
         # ========== GENERAR EXCEL ORIGINAL (sin funcionalidades avanzadas) ==========
 
@@ -183,8 +265,11 @@ def export_excel():
 
         row_num = 2
         for record in records:
-            user = User.query.get(record.user_id)
-            modified_by = User.query.get(record.modified_by) if record.modified_by else None
+            user = users_cache.get(record.user_id)
+            modified_by = (
+                users_cache.get(record.modified_by)
+                if record.modified_by else None
+            )
 
             # Calcular horas
             hours_worked = ""
@@ -300,6 +385,14 @@ def export_excel_monthly():
             flash("Formato de fecha inválido. Use YYYY-MM-DD.", "danger")
             return redirect(url_for("export.export_excel_monthly"))
 
+        weekly_hours_value = None
+        if weekly_hours:
+            try:
+                weekly_hours_value = int(weekly_hours)
+            except ValueError:
+                flash("La jornada debe ser numérica.", "danger")
+                return redirect(url_for("export.export_excel_monthly"))
+
         # JOIN explícito
         query = TimeRecord.query.join(User, TimeRecord.user_id == User.id).filter(
             TimeRecord.date >= start_date,
@@ -312,25 +405,37 @@ def export_excel_monthly():
             query = query.filter(TimeRecord.user_id == user_id)
         if categoria:
             query = query.filter(User.categoria == categoria)
-        if weekly_hours:
-            try:
-                wh = int(weekly_hours)
-                query = query.filter(User.weekly_hours.isnot(None))
-                query = query.filter(db.cast(User.weekly_hours, db.Integer) == wh)
-            except ValueError:
-                flash("La jornada debe ser numérica.", "danger")
-                return redirect(url_for("export.export_excel_monthly"))
+        if weekly_hours_value is not None:
+            query = query.filter(User.weekly_hours.isnot(None))
+            query = query.filter(db.cast(User.weekly_hours, db.Integer) == weekly_hours_value)
 
         records = query.order_by(TimeRecord.user_id, TimeRecord.date).all()
+
+        statuses = _fetch_statuses(
+            start_date,
+            end_date,
+            centro=centro,
+            user_id=user_id,
+            categoria=categoria,
+            weekly_hours=weekly_hours_value,
+        )
+        status_notes = _status_notes_map(statuses)
+        records = _combine_records_with_statuses(records, statuses)
 
         if not records:
             flash("No hay registros para el período y filtros seleccionados.", "warning")
             return redirect(url_for("export.export_excel_monthly"))
 
-        status_notes = _status_notes_map(
-            {record.user_id for record in records},
-            start_date,
-            end_date
+        users_cache = _users_map(
+            {
+                record.user_id
+                for record in records
+            }
+            | {
+                getattr(record, "modified_by", None)
+                for record in records
+                if getattr(record, "modified_by", None)
+            }
         )
 
         # Usar la misma lógica de sumas semanales que ya tenemos implementada
@@ -368,7 +473,7 @@ def export_excel_monthly():
         row_num = 2
         
         for user_id in sorted(weekly_data.keys()):
-            user = User.query.get(user_id)
+            user = users_cache.get(user_id)
             
             for week_start in sorted(weekly_data[user_id].keys()):
                 week_end = week_start + timedelta(days=6)
@@ -433,7 +538,10 @@ def export_excel_monthly():
                 
                 # Registros individuales
                 for record in weekly_data[user_id][week_start]:
-                    modified_by = User.query.get(record.modified_by) if record.modified_by else None
+                    modified_by = (
+                        users_cache.get(record.modified_by)
+                        if record.modified_by else None
+                    )
                     hours_worked = ""
                     if record.check_in and record.check_out:
                         time_diff = record.check_out - record.check_in
@@ -549,14 +657,23 @@ def export_excel_daily():
         return redirect(url_for("export.export_excel"))
 
     records = TimeRecord.query.filter(TimeRecord.date == fecha).order_by(TimeRecord.user_id).all()
+    statuses = _fetch_statuses(fecha, fecha)
+    status_notes = _status_notes_map(statuses)
+    records = _combine_records_with_statuses(records, statuses)
     if not records:
         flash("No hay registros para ese día.", "warning")
         return redirect(url_for("export.export_excel"))
 
-    status_notes = _status_notes_map(
-        {record.user_id for record in records},
-        fecha,
-        fecha
+    users_cache = _users_map(
+        {
+            record.user_id
+            for record in records
+        }
+        | {
+            getattr(record, "modified_by", None)
+            for record in records
+            if getattr(record, "modified_by", None)
+        }
     )
 
     wb = openpyxl.Workbook()
@@ -575,7 +692,7 @@ def export_excel_daily():
 
     row_num = 2
     for record in records:
-        user = User.query.get(record.user_id)
+        user = users_cache.get(record.user_id)
         hours_worked = ""
         if record.check_in and record.check_out:
             time_diff = record.check_out - record.check_in
@@ -627,14 +744,23 @@ def export_pdf_daily():
         return redirect(url_for("export.export_excel"))
 
     records = TimeRecord.query.filter(TimeRecord.date == fecha).order_by(TimeRecord.user_id).all()
+    statuses = _fetch_statuses(fecha, fecha)
+    status_notes = _status_notes_map(statuses)
+    records = _combine_records_with_statuses(records, statuses)
     if not records:
         flash("No hay registros para ese día.", "warning")
         return redirect(url_for("export.export_excel"))
 
-    status_notes = _status_notes_map(
-        {record.user_id for record in records},
-        fecha,
-        fecha
+    users_cache = _users_map(
+        {
+            record.user_id
+            for record in records
+        }
+        | {
+            getattr(record, "modified_by", None)
+            for record in records
+            if getattr(record, "modified_by", None)
+        }
     )
 
     pdf = FPDF(orientation="L", unit="mm", format="A4")
@@ -655,7 +781,7 @@ def export_pdf_daily():
 
     pdf.set_font("Arial", "", 9)
     for record in records:
-        user = User.query.get(record.user_id)
+        user = users_cache.get(record.user_id)
         hours_worked = ""
         if record.check_in and record.check_out:
             time_diff = record.check_out - record.check_in
