@@ -4,6 +4,7 @@ from models.models import User, TimeRecord, EmployeeStatus
 from models.database import db
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta, date
+from types import SimpleNamespace
 import os
 import tempfile
 import openpyxl
@@ -29,20 +30,98 @@ def admin_required(f):
     return decorated_function
 
 
-def _status_notes_map(user_ids, start_date=None, end_date=None):
-    """Return {(user_id, date): notes} for EmployeeStatus rows in range."""
-    if not user_ids:
-        return {}
+def _fetch_statuses(start_date, end_date, *, centro=None, user_id=None,
+                    categoria=None, weekly_hours=None):
+    """Return EmployeeStatus rows matching the provided filters."""
+    query = EmployeeStatus.query.join(User, EmployeeStatus.user_id == User.id)
+    query = query.filter(EmployeeStatus.date >= start_date)
+    query = query.filter(EmployeeStatus.date <= end_date)
 
-    query = EmployeeStatus.query.filter(EmployeeStatus.user_id.in_(user_ids))
-    if start_date:
-        query = query.filter(EmployeeStatus.date >= start_date)
-    if end_date:
-        query = query.filter(EmployeeStatus.date <= end_date)
+    if user_id:
+        query = query.filter(EmployeeStatus.user_id == user_id)
+    if centro:
+        query = query.filter(User.centro == centro)
+    if categoria:
+        query = query.filter(User.categoria == categoria)
+    if weekly_hours is not None:
+        query = query.filter(User.weekly_hours.isnot(None))
+        query = query.filter(db.cast(User.weekly_hours, db.Integer) == weekly_hours)
 
+    return query.all()
+
+
+def _status_notes_map(statuses):
+    """Return {(user_id, date): notes} for the provided EmployeeStatus rows."""
     return {
         (status.user_id, status.date): status.notes
-        for status in query.all()
+        for status in statuses
+    }
+
+
+def _status_times_map(statuses):
+    """Return {(user_id, date): (entry_time, exit_time)} for the statuses."""
+    return {
+        (status.user_id, status.date): (status.entry_time, status.exit_time)
+        for status in statuses
+    }
+
+
+def _combine_records_with_statuses(records, statuses):
+    """Append placeholder records for statuses without time records."""
+    combined = list(records)
+    existing_keys = {
+        (record.user_id, record.date)
+        for record in records
+    }
+
+    for status in statuses:
+        key = (status.user_id, status.date)
+        if key in existing_keys:
+            continue
+
+        combined.append(
+            SimpleNamespace(
+                user_id=status.user_id,
+                date=status.date,
+                check_in=(
+                    datetime.combine(status.date, status.entry_time)
+                    if status.entry_time
+                    else None
+                ),
+                check_out=(
+                    datetime.combine(status.date, status.exit_time)
+                    if status.exit_time
+                    else None
+                ),
+                notes=None,
+                modified_by=None,
+                updated_at=(
+                    status.updated_at
+                    or status.created_at
+                    or datetime.combine(status.date, datetime.min.time())
+                ),
+            )
+        )
+
+    combined.sort(
+        key=lambda record: (
+            record.user_id,
+            record.date,
+            record.check_in or datetime.min
+        )
+    )
+    return combined
+
+
+def _users_map(user_ids):
+    """Return {user_id: User} for the provided identifiers."""
+    filtered_ids = {uid for uid in user_ids if uid is not None}
+    if not filtered_ids:
+        return {}
+
+    return {
+        user.id: user
+        for user in User.query.filter(User.id.in_(filtered_ids)).all()
     }
 
 # ========== EXPORTACIÓN PRINCIPAL CON FILTROS ==========
@@ -127,6 +206,14 @@ def export_excel():
         print('weekly_hours:', weekly_hours)
         print('--------------------------')
 
+        weekly_hours_value = None
+        if weekly_hours:
+            try:
+                weekly_hours_value = int(weekly_hours)
+            except ValueError:
+                flash("La jornada debe ser numérica.", "danger")
+                return redirect(url_for("export.export_excel"))
+
         # JOIN explícito para evitar AmbiguousForeignKeysError
         query = TimeRecord.query.join(User, TimeRecord.user_id == User.id).filter(
             TimeRecord.date >= start_date,
@@ -143,25 +230,37 @@ def export_excel():
         if categoria:
             query = query.filter(User.categoria == categoria)
         # El filtro de horas solo si se selecciona una concreta
-        if weekly_hours:
-            try:
-                wh = int(weekly_hours)
-                query = query.filter(User.weekly_hours.isnot(None))
-                query = query.filter(db.cast(User.weekly_hours, db.Integer) == wh)
-            except ValueError:
-                flash("La jornada debe ser numérica.", "danger")
-                return redirect(url_for("export.export_excel"))
+        if weekly_hours_value is not None:
+            query = query.filter(User.weekly_hours.isnot(None))
+            query = query.filter(db.cast(User.weekly_hours, db.Integer) == weekly_hours_value)
 
         records = query.order_by(TimeRecord.user_id, TimeRecord.date).all()
-        status_notes = _status_notes_map(
-            {record.user_id for record in records},
+        statuses = _fetch_statuses(
             start_date,
-            end_date
+            end_date,
+            centro=centro,
+            user_id=user_id,
+            categoria=categoria,
+            weekly_hours=weekly_hours_value,
         )
-
+        status_notes = _status_notes_map(statuses)
+        status_times = _status_times_map(statuses)
+        records = _combine_records_with_statuses(records, statuses)
         if not records:
             flash("No hay registros para el período y filtros seleccionados.", "warning")
             return redirect(url_for("export.export_excel"))
+
+        users_cache = _users_map(
+            {
+                record.user_id
+                for record in records
+            }
+            | {
+                getattr(record, "modified_by", None)
+                for record in records
+                if getattr(record, "modified_by", None)
+            }
+        )
 
         # ========== GENERAR EXCEL ORIGINAL (sin funcionalidades avanzadas) ==========
 
@@ -171,8 +270,9 @@ def export_excel():
 
         header = [
             "Usuario", "Nombre completo", "Categoría", "Centro",
-            "Fecha", "Entrada", "Salida", "Horas Trabajadas",
-            "Notas", "Notas Admin", "Modificado Por", "Última Actualización"
+            "Fecha", "Entrada", "Salida", "Entrada Admin", "Salida Admin",
+            "Horas Trabajadas", "Notas", "Notas Admin", "Modificado Por",
+            "Última Actualización"
         ]
         for col_num, header_text in enumerate(header, 1):
             cell = ws.cell(row=1, column=col_num)
@@ -183,8 +283,11 @@ def export_excel():
 
         row_num = 2
         for record in records:
-            user = User.query.get(record.user_id)
-            modified_by = User.query.get(record.modified_by) if record.modified_by else None
+            user = users_cache.get(record.user_id)
+            modified_by = (
+                users_cache.get(record.modified_by)
+                if record.modified_by else None
+            )
 
             # Calcular horas
             hours_worked = ""
@@ -193,6 +296,11 @@ def export_excel():
                 hours = time_diff.total_seconds() / 3600
                 hours_worked = f"{hours:.2f}"
 
+            admin_entry, admin_exit = status_times.get(
+                (record.user_id, record.date),
+                (None, None),
+            )
+
             ws.cell(row=row_num, column=1).value = user.username if user else f"ID: {record.user_id}"
             ws.cell(row=row_num, column=2).value = user.full_name if user else "-"
             ws.cell(row=row_num, column=3).value = user.categoria if user and user.categoria else "-"
@@ -200,13 +308,15 @@ def export_excel():
             ws.cell(row=row_num, column=5).value = record.date.strftime("%d/%m/%Y")
             ws.cell(row=row_num, column=6).value = record.check_in.strftime("%H:%M:%S") if record.check_in else "-"
             ws.cell(row=row_num, column=7).value = record.check_out.strftime("%H:%M:%S") if record.check_out else "-"
-            ws.cell(row=row_num, column=8).value = hours_worked
-            ws.cell(row=row_num, column=9).value = record.notes or ""
-            ws.cell(row=row_num, column=10).value = status_notes.get(
+            ws.cell(row=row_num, column=8).value = admin_entry.strftime("%H:%M") if admin_entry else "-"
+            ws.cell(row=row_num, column=9).value = admin_exit.strftime("%H:%M") if admin_exit else "-"
+            ws.cell(row=row_num, column=10).value = hours_worked
+            ws.cell(row=row_num, column=11).value = record.notes or ""
+            ws.cell(row=row_num, column=12).value = status_notes.get(
                 (record.user_id, record.date), ""
             ) or ""
-            ws.cell(row=row_num, column=11).value = modified_by.username if modified_by else "-"
-            ws.cell(row=row_num, column=12).value = record.updated_at.strftime("%d/%m/%Y %H:%M:%S")
+            ws.cell(row=row_num, column=13).value = modified_by.username if modified_by else "-"
+            ws.cell(row=row_num, column=14).value = record.updated_at.strftime("%d/%m/%Y %H:%M:%S")
             row_num += 1
 
         for col_num, _ in enumerate(header, 1):
@@ -300,6 +410,14 @@ def export_excel_monthly():
             flash("Formato de fecha inválido. Use YYYY-MM-DD.", "danger")
             return redirect(url_for("export.export_excel_monthly"))
 
+        weekly_hours_value = None
+        if weekly_hours:
+            try:
+                weekly_hours_value = int(weekly_hours)
+            except ValueError:
+                flash("La jornada debe ser numérica.", "danger")
+                return redirect(url_for("export.export_excel_monthly"))
+
         # JOIN explícito
         query = TimeRecord.query.join(User, TimeRecord.user_id == User.id).filter(
             TimeRecord.date >= start_date,
@@ -312,25 +430,38 @@ def export_excel_monthly():
             query = query.filter(TimeRecord.user_id == user_id)
         if categoria:
             query = query.filter(User.categoria == categoria)
-        if weekly_hours:
-            try:
-                wh = int(weekly_hours)
-                query = query.filter(User.weekly_hours.isnot(None))
-                query = query.filter(db.cast(User.weekly_hours, db.Integer) == wh)
-            except ValueError:
-                flash("La jornada debe ser numérica.", "danger")
-                return redirect(url_for("export.export_excel_monthly"))
+        if weekly_hours_value is not None:
+            query = query.filter(User.weekly_hours.isnot(None))
+            query = query.filter(db.cast(User.weekly_hours, db.Integer) == weekly_hours_value)
 
         records = query.order_by(TimeRecord.user_id, TimeRecord.date).all()
+
+        statuses = _fetch_statuses(
+            start_date,
+            end_date,
+            centro=centro,
+            user_id=user_id,
+            categoria=categoria,
+            weekly_hours=weekly_hours_value,
+        )
+        status_notes = _status_notes_map(statuses)
+        status_times = _status_times_map(statuses)
+        records = _combine_records_with_statuses(records, statuses)
 
         if not records:
             flash("No hay registros para el período y filtros seleccionados.", "warning")
             return redirect(url_for("export.export_excel_monthly"))
 
-        status_notes = _status_notes_map(
-            {record.user_id for record in records},
-            start_date,
-            end_date
+        users_cache = _users_map(
+            {
+                record.user_id
+                for record in records
+            }
+            | {
+                getattr(record, "modified_by", None)
+                for record in records
+                if getattr(record, "modified_by", None)
+            }
         )
 
         # Usar la misma lógica de sumas semanales que ya tenemos implementada
@@ -355,7 +486,8 @@ def export_excel_monthly():
 
         header = [
             "Usuario", "Nombre completo", "Categoría", "Centro", "Horas Semanales",
-            "Fecha", "Entrada", "Salida", "Horas Trabajadas", "Diferencia Horas",
+            "Fecha", "Entrada", "Salida", "Entrada Admin", "Salida Admin",
+            "Horas Trabajadas", "Diferencia Horas",
             "Notas", "Notas Admin", "Modificado Por", "Última Actualización"
         ]
         for col_num, header_text in enumerate(header, 1):
@@ -368,7 +500,7 @@ def export_excel_monthly():
         row_num = 2
         
         for user_id in sorted(weekly_data.keys()):
-            user = User.query.get(user_id)
+            user = users_cache.get(user_id)
             
             for week_start in sorted(weekly_data[user_id].keys()):
                 week_end = week_start + timedelta(days=6)
@@ -401,14 +533,14 @@ def export_excel_monthly():
                 cell.alignment = Alignment(horizontal='center')
                 cell.fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
                 
-                # Columnas 6, 7, 8: "-"
-                for col in range(6, 9):
+                # Columnas 6 a 10: "-"
+                for col in range(6, 11):
                     cell = ws.cell(row=row_num, column=col)
                     cell.value = "-"
                     cell.alignment = Alignment(horizontal='center')
                     cell.fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
                 
-                cell = ws.cell(row=row_num, column=9)
+                cell = ws.cell(row=row_num, column=11)
                 cell.value = f"{total_hours:.2f}"
                 cell.font = Font(bold=True)
                 cell.alignment = Alignment(horizontal='center')
@@ -417,13 +549,13 @@ def export_excel_monthly():
                 # Calcular diferencia
                 weekly_hours_contract = user.weekly_hours if user and user.weekly_hours else 0
                 difference = weekly_hours_contract - total_hours
-                cell = ws.cell(row=row_num, column=10)
+                cell = ws.cell(row=row_num, column=12)
                 cell.value = f"{difference:.2f}"
                 cell.font = Font(bold=True)
                 cell.alignment = Alignment(horizontal='center')
                 cell.fill = PatternFill(start_color="E6F3FF", end_color="E6F3FF", fill_type="solid")
                 
-                for col in range(11, 15):
+                for col in range(13, 17):
                     cell = ws.cell(row=row_num, column=col)
                     cell.value = "-"
                     cell.alignment = Alignment(horizontal='center')
@@ -433,13 +565,20 @@ def export_excel_monthly():
                 
                 # Registros individuales
                 for record in weekly_data[user_id][week_start]:
-                    modified_by = User.query.get(record.modified_by) if record.modified_by else None
+                    modified_by = (
+                        users_cache.get(record.modified_by)
+                        if record.modified_by else None
+                    )
                     hours_worked = ""
                     if record.check_in and record.check_out:
                         time_diff = record.check_out - record.check_in
                         hours = time_diff.total_seconds() / 3600
                         hours_worked = f"{hours:.2f}"
                     admin_note = status_notes.get((record.user_id, record.date), "") or ""
+                    admin_entry, admin_exit = status_times.get(
+                        (record.user_id, record.date),
+                        (None, None),
+                    )
 
                     cell = ws.cell(row=row_num, column=1)
                     cell.value = user.username if user else f"ID: {record.user_id}"
@@ -474,26 +613,34 @@ def export_excel_monthly():
                     cell.alignment = Alignment(horizontal='center')
                     
                     cell = ws.cell(row=row_num, column=9)
+                    cell.value = admin_entry.strftime("%H:%M") if admin_entry else "-"
+                    cell.alignment = Alignment(horizontal='center')
+
+                    cell = ws.cell(row=row_num, column=10)
+                    cell.value = admin_exit.strftime("%H:%M") if admin_exit else "-"
+                    cell.alignment = Alignment(horizontal='center')
+
+                    cell = ws.cell(row=row_num, column=11)
                     cell.value = hours_worked
                     cell.alignment = Alignment(horizontal='center')
-                    
-                    cell = ws.cell(row=row_num, column=10)
+
+                    cell = ws.cell(row=row_num, column=12)
                     cell.value = "-"
                     cell.alignment = Alignment(horizontal='center')
-                    
-                    cell = ws.cell(row=row_num, column=11)
+
+                    cell = ws.cell(row=row_num, column=13)
                     cell.value = record.notes or ""
                     cell.alignment = Alignment(horizontal='center')
-                    
-                    cell = ws.cell(row=row_num, column=12)
+
+                    cell = ws.cell(row=row_num, column=14)
                     cell.value = admin_note
                     cell.alignment = Alignment(horizontal='center')
-                    
-                    cell = ws.cell(row=row_num, column=13)
+
+                    cell = ws.cell(row=row_num, column=15)
                     cell.value = modified_by.username if modified_by else "-"
                     cell.alignment = Alignment(horizontal='center')
-                    
-                    cell = ws.cell(row=row_num, column=14)
+
+                    cell = ws.cell(row=row_num, column=16)
                     cell.value = record.updated_at.strftime("%d/%m/%Y %H:%M:%S")
                     cell.alignment = Alignment(horizontal='center')
                     row_num += 1
@@ -549,14 +696,24 @@ def export_excel_daily():
         return redirect(url_for("export.export_excel"))
 
     records = TimeRecord.query.filter(TimeRecord.date == fecha).order_by(TimeRecord.user_id).all()
+    statuses = _fetch_statuses(fecha, fecha)
+    status_notes = _status_notes_map(statuses)
+    status_times = _status_times_map(statuses)
+    records = _combine_records_with_statuses(records, statuses)
     if not records:
         flash("No hay registros para ese día.", "warning")
         return redirect(url_for("export.export_excel"))
 
-    status_notes = _status_notes_map(
-        {record.user_id for record in records},
-        fecha,
-        fecha
+    users_cache = _users_map(
+        {
+            record.user_id
+            for record in records
+        }
+        | {
+            getattr(record, "modified_by", None)
+            for record in records
+            if getattr(record, "modified_by", None)
+        }
     )
 
     wb = openpyxl.Workbook()
@@ -564,8 +721,8 @@ def export_excel_daily():
     ws.title = "Registros diarios"
     header = [
         "Usuario", "Nombre completo", "Categoría", "Centro",
-        "Fecha", "Entrada", "Salida", "Horas Trabajadas",
-        "Notas", "Notas Admin"
+        "Fecha", "Entrada", "Salida", "Entrada Admin", "Salida Admin",
+        "Horas Trabajadas", "Notas", "Notas Admin"
     ]
     for col_num, header_text in enumerate(header, 1):
         cell = ws.cell(row=1, column=col_num)
@@ -575,12 +732,17 @@ def export_excel_daily():
 
     row_num = 2
     for record in records:
-        user = User.query.get(record.user_id)
+        user = users_cache.get(record.user_id)
         hours_worked = ""
         if record.check_in and record.check_out:
             time_diff = record.check_out - record.check_in
             hours = time_diff.total_seconds() / 3600
             hours_worked = f"{hours:.2f}"
+
+        admin_entry, admin_exit = status_times.get(
+            (record.user_id, record.date),
+            (None, None),
+        )
 
         ws.cell(row=row_num, column=1).value = user.username if user else f"ID: {record.user_id}"
         ws.cell(row=row_num, column=2).value = user.full_name if user else "-"
@@ -589,9 +751,11 @@ def export_excel_daily():
         ws.cell(row=row_num, column=5).value = record.date.strftime("%d/%m/%Y")
         ws.cell(row=row_num, column=6).value = record.check_in.strftime("%H:%M:%S") if record.check_in else "-"
         ws.cell(row=row_num, column=7).value = record.check_out.strftime("%H:%M:%S") if record.check_out else "-"
-        ws.cell(row=row_num, column=8).value = hours_worked
-        ws.cell(row=row_num, column=9).value = record.notes or ""
-        ws.cell(row=row_num, column=10).value = status_notes.get(
+        ws.cell(row=row_num, column=8).value = admin_entry.strftime("%H:%M") if admin_entry else "-"
+        ws.cell(row=row_num, column=9).value = admin_exit.strftime("%H:%M") if admin_exit else "-"
+        ws.cell(row=row_num, column=10).value = hours_worked
+        ws.cell(row=row_num, column=11).value = record.notes or ""
+        ws.cell(row=row_num, column=12).value = status_notes.get(
             (record.user_id, record.date), ""
         ) or ""
         row_num += 1
@@ -627,14 +791,24 @@ def export_pdf_daily():
         return redirect(url_for("export.export_excel"))
 
     records = TimeRecord.query.filter(TimeRecord.date == fecha).order_by(TimeRecord.user_id).all()
+    statuses = _fetch_statuses(fecha, fecha)
+    status_notes = _status_notes_map(statuses)
+    status_times = _status_times_map(statuses)
+    records = _combine_records_with_statuses(records, statuses)
     if not records:
         flash("No hay registros para ese día.", "warning")
         return redirect(url_for("export.export_excel"))
 
-    status_notes = _status_notes_map(
-        {record.user_id for record in records},
-        fecha,
-        fecha
+    users_cache = _users_map(
+        {
+            record.user_id
+            for record in records
+        }
+        | {
+            getattr(record, "modified_by", None)
+            for record in records
+            if getattr(record, "modified_by", None)
+        }
     )
 
     pdf = FPDF(orientation="L", unit="mm", format="A4")
@@ -645,9 +819,10 @@ def export_pdf_daily():
     pdf.set_font("Arial", "B", 10)
     header = [
         "Usuario", "Nombre completo", "Categoría", "Centro",
-        "Entrada", "Salida", "Horas", "Notas", "Notas Admin"
+        "Entrada", "Salida", "Entrada Admin", "Salida Admin",
+        "Horas", "Notas", "Notas Admin"
     ]
-    col_widths = [28, 38, 24, 28, 20, 20, 24, 40, 40]
+    col_widths = [24, 36, 22, 26, 18, 18, 18, 18, 22, 32, 32]
 
     for i, col_name in enumerate(header):
         pdf.cell(col_widths[i], 8, col_name, border=1, align="C")
@@ -655,12 +830,17 @@ def export_pdf_daily():
 
     pdf.set_font("Arial", "", 9)
     for record in records:
-        user = User.query.get(record.user_id)
+        user = users_cache.get(record.user_id)
         hours_worked = ""
         if record.check_in and record.check_out:
             time_diff = record.check_out - record.check_in
             hours = time_diff.total_seconds() / 3600
             hours_worked = f"{hours:.2f}"
+
+        admin_entry, admin_exit = status_times.get(
+            (record.user_id, record.date),
+            (None, None),
+        )
 
         row = [
             user.username if user else f"ID: {record.user_id}",
@@ -669,6 +849,8 @@ def export_pdf_daily():
             user.centro if user and user.centro else "-",
             record.check_in.strftime("%H:%M:%S") if record.check_in else "-",
             record.check_out.strftime("%H:%M:%S") if record.check_out else "-",
+            admin_entry.strftime("%H:%M") if admin_entry else "-",
+            admin_exit.strftime("%H:%M") if admin_exit else "-",
             hours_worked,
             record.notes or "",
             status_notes.get((record.user_id, record.date), "") or ""

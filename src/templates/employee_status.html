@@ -84,6 +84,14 @@
           </select>
         </div>
         <div class="mb-4">
+          <label class="block text-sm text-gray-300 mb-1">Hora entrada</label>
+          <input type="time" id="edit_entry_time" name="edit_entry_time" class="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-gray-100">
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm text-gray-300 mb-1">Hora salida</label>
+          <input type="time" id="edit_exit_time" name="edit_exit_time" class="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-gray-100">
+        </div>
+        <div class="mb-4">
           <label class="block text-sm text-gray-300 mb-1">Notas</label>
           <input type="text" id="edit_notes" name="edit_notes" class="w-full px-2 py-1 bg-gray-800 border border-gray-600 rounded text-gray-100">
         </div>
@@ -124,6 +132,8 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('edit_date').value = info.event.startStr;
       document.getElementById('edit_status').value = info.event.title.split(' - ')[0];
       document.getElementById('edit_notes').value = info.event.extendedProps.notes || '';
+      document.getElementById('edit_entry_time').value = info.event.extendedProps.entry_time || '';
+      document.getElementById('edit_exit_time').value = info.event.extendedProps.exit_time || '';
 
       // Delete (enviar POST)
       document.getElementById('deleteBtn').onclick = function() {
@@ -147,11 +157,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const status_id = document.getElementById('edit_status_id').value;
     const status = document.getElementById('edit_status').value;
     const notes = document.getElementById('edit_notes').value;
+    const entry_time = document.getElementById('edit_entry_time').value;
+    const exit_time = document.getElementById('edit_exit_time').value;
     fetch(`/admin/employees/{{ user.id }}/status/edit/${status_id}`, {
       method: "POST",
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({status, notes})
-    }).then(() => window.location.reload());
+      body: JSON.stringify({
+        status,
+        notes,
+        entry_time: entry_time || null,
+        exit_time: exit_time || null,
+      })
+    }).then(response => {
+      if (!response.ok) {
+        return response.json().then(data => {
+          alert(data.error || 'No se pudo guardar el estado.');
+        });
+      }
+      window.location.reload();
+    });
   };
 });
 </script>

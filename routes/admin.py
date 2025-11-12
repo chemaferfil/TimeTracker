@@ -68,6 +68,18 @@ def format_timedelta(td):
     minutes, _ = divmod(remainder, 60)
     return f"{hours:02}:{minutes:02}"
 
+
+def _parse_optional_time(value: str | None):
+    """Parse an optional HH:MM or HH:MM:SS string into a time."""
+    if not value:
+        return None
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(value, fmt).time()
+        except ValueError:
+            continue
+    raise ValueError
+
 # --------------------------------------------------------------------
 #  DASHBOARD
 # --------------------------------------------------------------------
@@ -641,7 +653,9 @@ def api_events():
             "extendedProps": {
                 "notes": es.notes,
                 "username": es.user.full_name or es.user.username,
-                "category": es.user.categoria
+                "category": es.user.categoria,
+                "entry_time": es.entry_time.strftime("%H:%M") if es.entry_time else None,
+                "exit_time": es.exit_time.strftime("%H:%M") if es.exit_time else None,
             },
             "allDay": True
         }
@@ -698,7 +712,7 @@ def manage_employee_status(user_id):
     """
     Alta / actualización de estados del empleado.
     • Se admite rango de fechas (start_date / end_date)
-    • Solo se guarda 'status' + 'notes'  → sin categoría
+    • Se guardan status, notas y opcionalmente horas de entrada/salida → sin categoría
     • Si ya existe un estado para ese día, se sobreescribe
     """
     user = User.query.get_or_404(user_id)
@@ -708,6 +722,15 @@ def manage_employee_status(user_id):
         end_str   = request.form.get("end_date") or start_str
         status    = request.form.get("status", "")
         notes     = request.form.get("notes", "")
+        entry_time_str = request.form.get("entry_time")
+        exit_time_str  = request.form.get("exit_time")
+
+        try:
+            entry_time = _parse_optional_time(entry_time_str)
+            exit_time = _parse_optional_time(exit_time_str)
+        except ValueError:
+            flash("Formato de hora inválido. Usa HH:MM.", "danger")
+            return redirect(url_for("admin.manage_employee_status", user_id=user_id))
 
         if not start_str:
             flash("Indica la fecha de inicio.", "danger")
@@ -733,12 +756,16 @@ def manage_employee_status(user_id):
             if existing:
                 existing.status = status
                 existing.notes  = notes
+                existing.entry_time = entry_time
+                existing.exit_time = exit_time
             else:
                 db.session.add(EmployeeStatus(
                     user_id = user_id,
                     date    = day,
                     status  = status,
-                    notes   = notes
+                    notes   = notes,
+                    entry_time = entry_time,
+                    exit_time = exit_time,
                 ))
         db.session.commit()
         flash("Estado guardado.", "success")
@@ -765,6 +792,11 @@ def edit_employee_status(user_id, status_id):
     data = request.get_json()
     status.status = data.get("status")
     status.notes = data.get("notes")
+    try:
+        status.entry_time = _parse_optional_time(data.get("entry_time"))
+        status.exit_time = _parse_optional_time(data.get("exit_time"))
+    except ValueError:
+        return jsonify({"ok": False, "error": "Formato de hora inválido. Usa HH:MM."}), 400
     db.session.commit()
     return jsonify({"ok": True})
 

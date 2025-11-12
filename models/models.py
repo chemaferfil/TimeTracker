@@ -94,6 +94,8 @@ class EmployeeStatus(db.Model):
         nullable=False,
         default=""
     )
+    entry_time = db.Column(db.Time, nullable=True)
+    exit_time = db.Column(db.Time, nullable=True)
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(
