@@ -58,6 +58,14 @@ def _status_notes_map(statuses):
     }
 
 
+def _status_times_map(statuses):
+    """Return {(user_id, date): (entry_time, exit_time)} for the provided EmployeeStatus rows."""
+    return {
+        (status.user_id, status.date): (status.entry_time, status.exit_time)
+        for status in statuses
+    }
+
+
 def _combine_records_with_statuses(records, statuses):
     """Append placeholder records for statuses without time records."""
     combined = list(records)
@@ -228,6 +236,7 @@ def export_excel():
             weekly_hours=weekly_hours_value,
         )
         status_notes = _status_notes_map(statuses)
+        status_times = _status_times_map(statuses)
         records = _combine_records_with_statuses(records, statuses)
         if not records:
             flash("No hay registros para el período y filtros seleccionados.", "warning")
@@ -428,6 +437,7 @@ def export_excel_monthly():
             weekly_hours=weekly_hours_value,
         )
         status_notes = _status_notes_map(statuses)
+        status_times = _status_times_map(statuses)
         records = _combine_records_with_statuses(records, statuses)
 
         if not records:
@@ -680,6 +690,7 @@ def export_excel_daily():
     records = TimeRecord.query.filter(TimeRecord.date == fecha).order_by(TimeRecord.user_id).all()
     statuses = _fetch_statuses(fecha, fecha)
     status_notes = _status_notes_map(statuses)
+    status_times = _status_times_map(statuses)
     records = _combine_records_with_statuses(records, statuses)
     if not records:
         flash("No hay registros para ese día.", "warning")
@@ -774,6 +785,7 @@ def export_pdf_daily():
     records = TimeRecord.query.filter(TimeRecord.date == fecha).order_by(TimeRecord.user_id).all()
     statuses = _fetch_statuses(fecha, fecha)
     status_notes = _status_notes_map(statuses)
+    status_times = _status_times_map(statuses)
     records = _combine_records_with_statuses(records, statuses)
     if not records:
         flash("No hay registros para ese día.", "warning")

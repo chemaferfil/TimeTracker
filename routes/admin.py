@@ -64,9 +64,18 @@ def format_timedelta(td):
     if td is None:
         return "-"
     total_seconds = int(td.total_seconds())
+    # Manejar duraciones negativas correctamente
+    if total_seconds < 0:
+        is_negative = True
+        total_seconds = abs(total_seconds)
+    else:
+        is_negative = False
+
     hours, remainder = divmod(total_seconds, 3600)
     minutes, _ = divmod(remainder, 60)
-    return f"{hours:02}:{minutes:02}"
+
+    result = f"{hours:02}:{minutes:02}"
+    return f"-{result}" if is_negative else result
 
 
 def _parse_optional_time(value: str | None):
@@ -827,9 +836,14 @@ def open_records():
         record = TimeRecord.query.get(record_id)
         if record and close_time:
             try:
-                record.check_out = datetime.strptime(close_time, "%Y-%m-%dT%H:%M")
-                db.session.commit()
-                flash("Registro cerrado correctamente.", "success")
+                check_out_time = datetime.strptime(close_time, "%Y-%m-%dT%H:%M")
+                # Validar que check_out no sea anterior a check_in
+                if record.check_in and check_out_time < record.check_in:
+                    flash(f"Error: La hora de salida ({check_out_time.strftime('%H:%M')}) no puede ser anterior a la entrada ({record.check_in.strftime('%H:%M:%S')}).", "danger")
+                else:
+                    record.check_out = check_out_time
+                    db.session.commit()
+                    flash("Registro cerrado correctamente.", "success")
             except Exception as e:
                 flash(f"Error al cerrar: {e}", "danger")
         return redirect(url_for("admin.open_records"))

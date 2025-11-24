@@ -20,9 +20,18 @@ def format_timedelta(td):
     if td is None:
         return "-"
     total_seconds = int(td.total_seconds())
+    # Manejar duraciones negativas correctamente
+    if total_seconds < 0:
+        is_negative = True
+        total_seconds = abs(total_seconds)
+    else:
+        is_negative = False
+
     hours, remainder = divmod(total_seconds, 3600)
     minutes, _ = divmod(remainder, 60)
-    return f"{hours:02}:{minutes:02}"
+
+    result = f"{hours:02}:{minutes:02}"
+    return f"-{result}" if is_negative else result
 
 
 # ------------------------------------------------------------------
