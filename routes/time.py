@@ -6,11 +6,13 @@ from sqlalchemy import desc, text, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from datetime import datetime, date, timedelta
 import calendar
+import logging
 
 from models.models import TimeRecord, User, EmployeeStatus
 from models.database import db
 
 time_bp = Blueprint("time", __name__)
+logger = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------------
@@ -104,6 +106,7 @@ def check_in():
 
     except IntegrityError as e:
         db.session.rollback()
+        logger.error(f"IntegrityError en check_in: {e}", exc_info=True)
         # Si es violación de unique constraint en employee_status, es porque
         # ya existe el status para hoy (creado por otro proceso concurrente)
         # En ese caso, solo creamos el TimeRecord
@@ -114,13 +117,16 @@ def check_in():
                 db.session.add(new_rec)
                 db.session.commit()
                 flash("Entrada registrada correctamente.", "success")
-            except SQLAlchemyError:
+            except SQLAlchemyError as e2:
                 db.session.rollback()
+                logger.error(f"Error en retry de check_in: {e2}", exc_info=True)
                 flash("Error al registrar la entrada. Intenta de nuevo.", "danger")
         else:
+            logger.error(f"IntegrityError no relacionado con employee_status: {e.orig}")
             flash("Error al registrar la entrada. Intenta de nuevo.", "danger")
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.session.rollback()
+        logger.error(f"SQLAlchemyError en check_in: {e}", exc_info=True)
         flash("Error al registrar la entrada. Intenta de nuevo.", "danger")
 
     return redirect(url_for("time.dashboard_employee"))
