@@ -3,7 +3,7 @@ from flask import (
     url_for, flash, session
 )
 from sqlalchemy import desc, text, and_
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from datetime import datetime, date, timedelta
 import calendar
 
@@ -52,7 +52,14 @@ def check_in():
         return redirect(url_for("time.dashboard_employee"))
 
     try:
-        # 1) ¿Tiene hoy un estado NO trabajable?
+        # 1) Bloqueo en Postgres/MySQL al inicio
+        bind = db.session.get_bind()
+        if bind and bind.dialect.name == "postgresql":
+            db.session.execute(
+                text("LOCK TABLE public.time_record IN SHARE ROW EXCLUSIVE MODE")
+            )
+
+        # 2) ¿Tiene hoy un estado NO trabajable?
         today_status = EmployeeStatus.query.filter_by(
             user_id=user_id, date=date.today()
         ).first()
@@ -62,13 +69,6 @@ def check_in():
                 "danger"
             )
             return redirect(url_for("time.dashboard_employee"))
-
-        # 2) Bloqueo en Postgres (por si lo usas)
-        bind = db.session.get_bind()
-        if bind and bind.dialect.name == "postgresql":
-            db.session.execute(
-                text("LOCK TABLE public.time_record IN SHARE ROW EXCLUSIVE MODE")
-            )
 
         # 3) ¿Ya hay un fichaje abierto?
         existing_open = (
@@ -92,7 +92,6 @@ def check_in():
 
             # --- si no existe EmployeeStatus hoy, crearlo como Trabajado ---
             if not today_status:
-                user = User.query.get(user_id)
                 db.session.add(EmployeeStatus(
                     user_id  = user_id,
                     date     = now.date(),
@@ -103,6 +102,23 @@ def check_in():
             db.session.commit()
             flash("Entrada registrada correctamente.", "success")
 
+    except IntegrityError as e:
+        db.session.rollback()
+        # Si es violación de unique constraint en employee_status, es porque
+        # ya existe el status para hoy (creado por otro proceso concurrente)
+        # En ese caso, solo creamos el TimeRecord
+        if "employee_status" in str(e.orig) or "uix_employee_date" in str(e.orig):
+            try:
+                now = datetime.now()
+                new_rec = TimeRecord(user_id=user_id, check_in=now, date=now.date())
+                db.session.add(new_rec)
+                db.session.commit()
+                flash("Entrada registrada correctamente.", "success")
+            except SQLAlchemyError:
+                db.session.rollback()
+                flash("Error al registrar la entrada. Intenta de nuevo.", "danger")
+        else:
+            flash("Error al registrar la entrada. Intenta de nuevo.", "danger")
     except SQLAlchemyError:
         db.session.rollback()
         flash("Error al registrar la entrada. Intenta de nuevo.", "danger")
