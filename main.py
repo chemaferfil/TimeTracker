@@ -1,5 +1,6 @@
 import os
 import sys
+from zoneinfo import ZoneInfo
 
 # Add current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -156,7 +157,13 @@ def init_scheduler():
         return
         
     try:
-        scheduler = BackgroundScheduler(daemon=True)
+        tz_name = os.getenv("APP_TIMEZONE", "Europe/Madrid")
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = ZoneInfo("Europe/Madrid")
+
+        scheduler = BackgroundScheduler(daemon=True, timezone=tz)
         
         # Import the task function
         from tasks.scheduler import auto_close_open_records
@@ -164,10 +171,11 @@ def init_scheduler():
         # Schedule the auto-close task to run daily at 23:59:59
         scheduler.add_job(
             func=auto_close_open_records,
-            trigger=CronTrigger(hour=23, minute=59, second=59),
+            trigger=CronTrigger(hour=23, minute=59, second=59, timezone=tz),
             id='auto_close_records',
             name='Auto-close open time records',
-            replace_existing=True
+            replace_existing=True,
+            kwargs={"include_today": True, "app": app}
         )
         
         scheduler.start()

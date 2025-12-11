@@ -10,3 +10,19 @@ services:
         value: 3.11.4
       - key: FLASK_ENV
         value: production
+      - key: APP_TIMEZONE
+        value: Europe/Madrid
+
+  - type: cron
+    name: timetracker-auto-close
+    env: python
+    schedule: "59 23 * * *"
+    buildCommand: "./build.sh"
+    startCommand: "python tasks/run_auto_close.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.4
+      - key: FLASK_ENV
+        value: production
+      - key: APP_TIMEZONE
+        value: Europe/Madrid

@@ -4,7 +4,7 @@ from flask import (
 )
 from sqlalchemy import desc, text, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time as dt_time
 import calendar
 import logging
 
@@ -47,6 +47,13 @@ def check_in():
 
      # BUSCA REGISTRO ABIERTO
     existing_open = TimeRecord.query.filter_by(user_id=user_id, check_out=None).order_by(desc(TimeRecord.id)).first()
+    if existing_open and existing_open.date < date.today():
+        auto_close_time = datetime.combine(existing_open.date, dt_time(23, 59, 59))
+        existing_open.check_out = auto_close_time
+        existing_open.notes = (existing_open.notes or "") + (" - " if existing_open.notes else "") + "Cerrado automáticamente al iniciar nuevo día"
+        db.session.commit()
+        flash("Se cerró automáticamente tu fichaje pendiente de ayer a las 23:59.", "info")
+        existing_open = None
     if existing_open:
         # Permite al usuario cerrarlo desde aquí
         flash(f"Tienes un fichaje abierto desde {existing_open.check_in.strftime('%d-%m-%Y %H:%M:%S')}. Debes cerrarlo antes de fichar entrada.", "warning")
@@ -279,4 +286,3 @@ def calendar_view():
         month=month,
         month_days=month_days
     )
-
