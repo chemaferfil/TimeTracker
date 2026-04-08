@@ -23,6 +23,13 @@ except ImportError as e:
     print(f"APScheduler not available: {e}", file=sys.stderr)
     SCHEDULER_AVAILABLE = False
 
+
+def _env_flag(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
 # Crear instancia de la app Flask
 app = Flask(
     __name__,
@@ -30,8 +37,23 @@ app = Flask(
     template_folder='src/templates'
 )
 
+is_production = bool(os.getenv('DYNO') or os.getenv('RENDER'))
+
 # Configuración general
-app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
+secret_key = os.getenv("SECRET_KEY")
+if secret_key:
+    app.config['SECRET_KEY'] = secret_key
+elif is_production:
+    raise RuntimeError("SECRET_KEY must be set in production")
+else:
+    app.config['SECRET_KEY'] = os.urandom(32).hex()
+
+app.config["LEGACY_ACCESS_NOTICE_ENABLED"] = _env_flag("LEGACY_ACCESS_NOTICE_ENABLED")
+app.config["LEGACY_ACCESS_URL"] = os.getenv("LEGACY_ACCESS_URL", "").strip()
+app.config["LEGACY_ACCESS_SUNSET_DAYS"] = os.getenv("LEGACY_ACCESS_SUNSET_DAYS", "10").strip() or "10"
+
+if app.config["LEGACY_ACCESS_NOTICE_ENABLED"] and not app.config["LEGACY_ACCESS_URL"]:
+    raise RuntimeError("LEGACY_ACCESS_URL must be set when LEGACY_ACCESS_NOTICE_ENABLED is enabled")
 
 # Configuración de la base de datos
 uri = os.getenv("RENDER_DATABASE_URL") or os.getenv("DATABASE_URL")
@@ -47,7 +69,6 @@ except Exception:
 print("Usando BD:", masked_uri, file=sys.stderr)
 
 # Configure SQLAlchemy engine options based on environment
-is_production = os.getenv('DYNO') or os.getenv('RENDER')
 if is_production:
     # Production environment - standard pooling for sync workers
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
@@ -116,7 +137,15 @@ def inject_user():
             else:
                 greeting = f"Buenas noches, {first_name}"
 
-    return dict(current_user=user, greeting=greeting)
+    return dict(
+        current_user=user,
+        greeting=greeting,
+        legacy_access_notice={
+            "enabled": app.config["LEGACY_ACCESS_NOTICE_ENABLED"],
+            "url": app.config["LEGACY_ACCESS_URL"],
+            "sunset_days": app.config["LEGACY_ACCESS_SUNSET_DAYS"],
+        },
+    )
 
 # Registrar blueprints
 app.register_blueprint(auth_bp)

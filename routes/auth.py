@@ -1,12 +1,19 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, session
 from werkzeug.security import check_password_hash
 from models.models import User
 from models.database import db
 
 auth_bp = Blueprint("auth", __name__)  # Usa la carpeta global de templates
 
+
+def _legacy_access_notice_enabled():
+    return bool(current_app.config.get("LEGACY_ACCESS_NOTICE_ENABLED"))
+
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
+    if _legacy_access_notice_enabled():
+        return render_template("welcome.html")
+
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
@@ -56,6 +63,9 @@ def logout():
 
 @auth_bp.route("/registro", methods=["GET", "POST"])
 def register():
+    if _legacy_access_notice_enabled():
+        return render_template("welcome.html")
+
     if request.method == "POST":
         username         = request.form.get("username")
         full_name        = request.form.get("full_name")

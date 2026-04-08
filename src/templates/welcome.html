@@ -19,6 +19,33 @@
     </script>
 </head>
 <body class="bg-black text-white font-sans flex justify-center items-center min-h-screen m-0">
+    {% if legacy_access_notice.enabled %}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-6">
+        <div class="w-full max-w-2xl rounded-3xl border border-miss-sushi-pink/40 bg-gray-950 p-8 text-left shadow-2xl">
+            <h2 class="mb-6 text-2xl font-semibold text-miss-sushi-pink">Nuevo acceso disponible</h2>
+            <p class="mb-4 text-lg leading-8 text-white">
+                El nuevo acceso a la aplicación se realizará aquí:
+                <a
+                  href="{{ legacy_access_notice.url }}"
+                  class="break-all text-miss-sushi-pink underline underline-offset-4 hover:opacity-90"
+                >
+                  {{ legacy_access_notice.url }}
+                </a>
+            </p>
+            <p class="mb-4 text-base leading-7 text-gray-200">Por favor, guarden este nuevo acceso.</p>
+            <p class="mb-4 text-base leading-7 text-gray-200">Se eliminará en {{ legacy_access_notice.sunset_days }} días.</p>
+            <p class="mb-8 text-base leading-7 text-gray-200">Gracias por su colaboración.</p>
+            <div class="flex flex-col gap-3 sm:flex-row">
+                <a
+                  href="{{ legacy_access_notice.url }}"
+                  class="inline-block rounded-full bg-miss-sushi-pink px-8 py-4 text-center text-lg font-bold text-white transition-opacity duration-300 ease-in-out hover:opacity-90"
+                >
+                  Ir al nuevo acceso
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
     <div class="text-center p-10">
         <!-- Logo de la empresa -->
         <img
@@ -32,12 +59,18 @@
         </h1>
         <!-- Botón de Iniciar Sesión -->
         <div class="flex flex-col gap-6 items-center">
+            {% if not legacy_access_notice.enabled %}
             <a
               href="{{ url_for('auth.login') }}"
               class="inline-block text-center py-4 px-10 rounded-full text-lg font-bold transition-opacity duration-300 ease-in-out bg-miss-sushi-pink text-white hover:opacity-90 w-64 no-underline"
             >
               Iniciar Sesión
             </a>
+            {% else %}
+            <p class="max-w-xl text-base leading-7 text-gray-300">
+              Este acceso antiguo dejará de estar disponible próximamente. Utilice el nuevo acceso indicado en la ventana superior.
+            </p>
+            {% endif %}
         </div>
     </div>
 </body>
