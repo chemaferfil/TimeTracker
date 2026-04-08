@@ -95,3 +95,8 @@ instance/
 *.tmp
 *.bak
 *~
+
+# Local database backup artifacts
+*.dump
+*.sql
+backups/

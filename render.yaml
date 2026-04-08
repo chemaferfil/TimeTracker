@@ -3,11 +3,14 @@ services:
     name: timetracker
     env: python
     plan: free
+    region: frankfurt
     buildCommand: "./build.sh"
-    startCommand: "gunicorn --worker-class eventlet -w 1 -b 0.0.0.0:$PORT wsgi:app --timeout 120"
+    startCommand: "python -m gunicorn --worker-class sync -w 1 -b 0.0.0.0:$PORT main:app --timeout 120"
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.4
+        value: 3.12.5
+      - key: TZ
+        value: Europe/Madrid
       - key: FLASK_ENV
         value: production
       - key: APP_TIMEZONE
@@ -16,12 +19,15 @@ services:
   - type: cron
     name: timetracker-auto-close
     env: python
+    region: frankfurt
     schedule: "59 23 * * *"
     buildCommand: "./build.sh"
     startCommand: "python tasks/run_auto_close.py"
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.4
+        value: 3.12.5
+      - key: TZ
+        value: Europe/Madrid
       - key: FLASK_ENV
         value: production
       - key: APP_TIMEZONE

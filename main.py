@@ -8,10 +8,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from flask import Flask, render_template
 from models.database import db
 from flask_migrate import Migrate, upgrade as migrate_upgrade
+from sqlalchemy.engine import make_url
 from routes.auth import auth_bp
 from routes.time import time_bp
 from routes.admin import admin_bp
 from routes.export import export_bp
+from routes.internal import internal_bp
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.cron import CronTrigger
@@ -32,21 +34,17 @@ app = Flask(
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 
 # Configuración de la base de datos
-# Forzamos el uso de la BD de Render para las pruebas locales (según tu petición)
-render_dsn = (
-    "postgresql://timetracker_db_ntuk_user:"
-    "iRlZxk7xdpA38AMYOIOZMt2lsyL1ST8l@"
-    "dpg-d2h0c78dl3ps73fq6s80-a.oregon-postgres.render.com:5432/"
-    "timetracker_db_ntuk?sslmode=require"
-)
 uri = os.getenv("RENDER_DATABASE_URL") or os.getenv("DATABASE_URL")
-# Si la URI no existe o apunta a MySQL, forzamos la de Render
-if not uri or uri.lower().startswith("mysql"):
-    uri = render_dsn
+if not uri:
+    raise RuntimeError("DATABASE_URL or RENDER_DATABASE_URL must be set")
 # Normalizar si viniera como postgres://
 uri = uri.replace("postgres://", "postgresql://")
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
-print("Usando BD:", app.config['SQLALCHEMY_DATABASE_URI'], file=sys.stderr)
+try:
+    masked_uri = make_url(uri).render_as_string(hide_password=True)
+except Exception:
+    masked_uri = "[configured]"
+print("Usando BD:", masked_uri, file=sys.stderr)
 
 # Configure SQLAlchemy engine options based on environment
 is_production = os.getenv('DYNO') or os.getenv('RENDER')
@@ -81,7 +79,7 @@ except Exception:
 def _log_db_on_request():
     try:
         from flask import request
-        print(f"[REQ] {request.method} {request.path} -> engine={db.engine.url.drivername} url={db.engine.url}", file=sys.stderr, flush=True)
+        print(f"[REQ] {request.method} {request.path} -> engine={db.engine.url.drivername}", file=sys.stderr, flush=True)
     except Exception as e:
         print(f"[REQ] engine-info error: {e}", file=sys.stderr, flush=True)
 
@@ -125,6 +123,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(time_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(export_bp)
+app.register_blueprint(internal_bp)
 
 # Ruta de inicio
 @app.route('/')
@@ -196,6 +195,6 @@ if __name__ == '__main__':
     debug_mode = not (os.getenv('DYNO') or os.getenv('RENDER'))
     app.run(host='0.0.0.0', port=port, debug=debug_mode)
 else:
-    # Cuando se ejecuta con gunicorn, inicializar la base de datos después de crear la app
+    # Cuando se importa desde gunicorn o desde el cron job externo, evitar arrancar
+    # el scheduler dentro del proceso web para no duplicar jobs en cada worker.
     init_db()
-    init_scheduler()
