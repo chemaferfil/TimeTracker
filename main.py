@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 # Add current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from flask import Flask, render_template
+from flask import Flask, render_template, jsonify
 from models.database import db
 from flask_migrate import Migrate, upgrade as migrate_upgrade
 from sqlalchemy.engine import make_url
@@ -158,6 +158,17 @@ app.register_blueprint(internal_bp)
 @app.route('/')
 def index():
     return render_template("welcome.html")
+
+
+@app.route('/healthz', methods=['GET'])
+def healthz():
+    """
+    Lightweight public endpoint for uptime pings.
+    Avoids template rendering and returns a fast 200 response.
+    """
+    response = jsonify({"ok": True, "service": "timetracker"})
+    response.headers["Cache-Control"] = "no-store"
+    return response, 200
 
 def init_db():
     """Initialize database tables and run migrations"""
