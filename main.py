@@ -5,9 +5,9 @@ from zoneinfo import ZoneInfo
 # Add current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template
 from models.database import db
-from flask_migrate import Migrate, upgrade as migrate_upgrade
+from flask_migrate import Migrate
 from sqlalchemy.engine import make_url
 from routes.auth import auth_bp
 from routes.time import time_bp
@@ -22,13 +22,6 @@ try:
 except ImportError as e:
     print(f"APScheduler not available: {e}", file=sys.stderr)
     SCHEDULER_AVAILABLE = False
-
-
-def _env_flag(name, default=False):
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 # Crear instancia de la app Flask
 app = Flask(
@@ -47,13 +40,6 @@ elif is_production:
     raise RuntimeError("SECRET_KEY must be set in production")
 else:
     app.config['SECRET_KEY'] = os.urandom(32).hex()
-
-app.config["LEGACY_ACCESS_NOTICE_ENABLED"] = _env_flag("LEGACY_ACCESS_NOTICE_ENABLED")
-app.config["LEGACY_ACCESS_URL"] = os.getenv("LEGACY_ACCESS_URL", "").strip()
-app.config["LEGACY_ACCESS_SUNSET_DAYS"] = os.getenv("LEGACY_ACCESS_SUNSET_DAYS", "10").strip() or "10"
-
-if app.config["LEGACY_ACCESS_NOTICE_ENABLED"] and not app.config["LEGACY_ACCESS_URL"]:
-    raise RuntimeError("LEGACY_ACCESS_URL must be set when LEGACY_ACCESS_NOTICE_ENABLED is enabled")
 
 # Configuración de la base de datos
 uri = os.getenv("RENDER_DATABASE_URL") or os.getenv("DATABASE_URL")
@@ -140,11 +126,6 @@ def inject_user():
     return dict(
         current_user=user,
         greeting=greeting,
-        legacy_access_notice={
-            "enabled": app.config["LEGACY_ACCESS_NOTICE_ENABLED"],
-            "url": app.config["LEGACY_ACCESS_URL"],
-            "sunset_days": app.config["LEGACY_ACCESS_SUNSET_DAYS"],
-        },
     )
 
 # Registrar blueprints
@@ -158,17 +139,6 @@ app.register_blueprint(internal_bp)
 @app.route('/')
 def index():
     return render_template("welcome.html")
-
-
-@app.route('/healthz', methods=['GET'])
-def healthz():
-    """
-    Lightweight public endpoint for uptime pings.
-    Avoids template rendering and returns a fast 200 response.
-    """
-    response = jsonify({"ok": True, "service": "timetracker"})
-    response.headers["Cache-Control"] = "no-store"
-    return response, 200
 
 def init_db():
     """Initialize database tables and run migrations"""
