@@ -5,7 +5,7 @@
 {% block content %}
 <section class="bg-gray-800 shadow-md rounded-lg p-6 mb-6">
     <!-- Paginación por semanas -->
-    <div class="flex gap-2 mb-4 items-center">
+    <div class="flex flex-wrap gap-2 mb-4 items-center">
       {% if page > 1 %}
         <a href="{{ url_for('admin.manage_records', page=page-1) }}"
            class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana anterior</a>
@@ -17,6 +17,16 @@
         <a href="{{ url_for('admin.manage_records', page=page+1) }}"
            class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana siguiente</a>
       {% endif %}
+      <form method="POST" action="{{ url_for('admin.autofill_week_records') }}" class="ml-auto">
+        <input type="hidden" name="page" value="{{ page }}">
+        <input type="hidden" name="centro" value="{{ request.args.get('centro', '') }}">
+        <button type="submit"
+                {% if is_current_week %}disabled{% endif %}
+                onclick="return confirm('¿Crear automáticamente los fichajes que falten para esta semana?')"
+                class="px-3 py-2 rounded text-white {% if is_current_week %}bg-gray-600 cursor-not-allowed{% else %}bg-emerald-700 hover:bg-emerald-600{% endif %}">
+          Autofichar semana
+        </button>
+      </form>
     </div>
 
     <!-- Filtros -->

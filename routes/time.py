@@ -4,12 +4,13 @@ from flask import (
 )
 from sqlalchemy import desc, text, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from datetime import datetime, date, timedelta, time as dt_time
+from datetime import datetime, date, timedelta
 import calendar
 import logging
 
 from models.models import TimeRecord, User, EmployeeStatus
 from models.database import db
+from tasks.scheduler import close_open_record
 
 time_bp = Blueprint("time", __name__)
 logger = logging.getLogger(__name__)
@@ -48,9 +49,7 @@ def check_in():
      # BUSCA REGISTRO ABIERTO
     existing_open = TimeRecord.query.filter_by(user_id=user_id, check_out=None).order_by(desc(TimeRecord.id)).first()
     if existing_open and existing_open.date < date.today():
-        auto_close_time = datetime.combine(existing_open.date, dt_time(23, 59, 59))
-        existing_open.check_out = auto_close_time
-        existing_open.notes = (existing_open.notes or "") + (" - " if existing_open.notes else "") + "Cerrado automáticamente al iniciar nuevo día"
+        close_open_record(existing_open)
         db.session.commit()
         flash("Se cerró automáticamente tu fichaje pendiente de ayer a las 23:59.", "info")
         existing_open = None
