@@ -100,3 +100,4 @@ instance/
 *.dump
 *.sql
 backups/
+render_recovery_info.txt

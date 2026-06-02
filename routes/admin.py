@@ -89,6 +89,7 @@ def _parse_optional_time(value: str | None):
             continue
     raise ValueError
 
+
 # --------------------------------------------------------------------
 #  DASHBOARD
 # --------------------------------------------------------------------
@@ -550,6 +551,51 @@ def manage_records():
         centros=centros,
         centro_admin=centro_admin
     )
+
+
+@admin_bp.route("/records/autofill", methods=["POST"])
+@admin_required
+def autofill_week_records():
+    page = request.form.get("page", type=int, default=1)
+    today = date.today()
+    start_of_current = today - timedelta(days=today.weekday())
+    start_of_week = start_of_current - timedelta(days=(page - 1) * 7)
+    end_of_week = start_of_week + timedelta(days=6)
+
+    if end_of_week >= today:
+        flash("Solo se puede autofichar una semana ya cerrada.", "warning")
+        return redirect(url_for("admin.manage_records", page=page))
+
+    centro_admin = get_admin_centro()
+    centro = centro_admin or request.form.get("centro") or None
+
+    try:
+        from tasks.autofill import autofill_week
+
+        result = autofill_week(
+            start_of_week,
+            centro=centro,
+            modified_by=session.get("user_id"),
+        )
+        if result.created_records:
+            flash(
+                f"Autofichaje completado: {result.created_records} registros creados.",
+                "success",
+            )
+        else:
+            flash("Autofichaje ejecutado sin crear nuevos registros.", "info")
+
+        skipped = result.skipped_users
+        if skipped:
+            flash(
+                f"{len(skipped)} empleados no se pudieron autofichar completamente. "
+                "Revisa ausencias, fechas de alta/baja o días de libranza.",
+                "warning",
+            )
+    except Exception as e:
+        flash(f"Error al ejecutar el autofichaje: {str(e)}", "danger")
+
+    return redirect(url_for("admin.manage_records", page=page))
 
 @admin_bp.route("/records/edit/<int:record_id>", methods=["GET", "POST"])
 @admin_required

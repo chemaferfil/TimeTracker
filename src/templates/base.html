@@ -60,8 +60,8 @@
     {% if session.get('is_admin') %}
     <!-- Sidebar -->
     <aside id="sidebar" class="hidden md:flex flex-col w-56 bg-gray-900 text-sushi-100 flex-shrink-0 fixed md:static z-20 h-full md:h-auto">
-      <div class="px-6 py-3 font-brand text-xl text-center border-b border-gray-700">Menú</div>
-      <nav class="mt-4 flex flex-col gap-1 px-2">
+      <div class="h-16 px-6 font-brand text-xl text-center border-b border-gray-700 flex items-center justify-center">Menú</div>
+      <nav class="flex flex-col gap-1 px-2 pt-2">
         {% set links = [
           {'endpoint': 'admin.dashboard',    'label': 'Dashboard'},
           {'endpoint': 'admin.manage_users', 'label': 'Gestionar Usuarios'},
@@ -86,7 +86,7 @@
     <div class="flex-1 flex flex-col ml-0 transition-all duration-300 ease-in-out">
 
       <!-- Topbar -->
-      <header class="bg-white dark:bg-gray-900 px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+      <header class="h-16 bg-white dark:bg-gray-900 px-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
         <div class="flex items-center gap-4">
           {% if session.get('is_admin') %}
           <!-- Botón hamburguesa solo en móvil -->
