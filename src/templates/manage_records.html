@@ -8,14 +8,14 @@
     <div class="flex flex-wrap gap-2 mb-4 items-center">
       {% if page > 1 %}
         <a href="{{ url_for('admin.manage_records', page=page-1) }}"
-           class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana anterior</a>
+           class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana siguiente</a>
       {% endif %}
       <span class="px-3 py-2 rounded font-semibold {% if is_current_week %}bg-fuchsia-700 text-white{% else %}bg-gray-700 text-gray-300{% endif %}">
         Semana {{ week_number }} ({{ week_range }})
       </span>
       {% if has_next %}
         <a href="{{ url_for('admin.manage_records', page=page+1) }}"
-           class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana siguiente</a>
+           class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded">Semana anterior</a>
       {% endif %}
       <form method="POST" action="{{ url_for('admin.autofill_week_records') }}" class="ml-auto">
         <input type="hidden" name="page" value="{{ page }}">
