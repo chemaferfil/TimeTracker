@@ -46,6 +46,15 @@ class User(db.Model):
         passive_deletes=True
     )
 
+    weekly_hours_periods = db.relationship(
+        "UserWeeklyHoursPeriod",
+        backref="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="UserWeeklyHoursPeriod.start_date"
+    )
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
@@ -54,6 +63,49 @@ class User(db.Model):
 
     def __repr__(self):
         return f"<User {self.username}>"
+
+
+class UserWeeklyHoursPeriod(db.Model):
+    __tablename__ = "user_weekly_hours_period"
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id",
+            "start_date",
+            name="uix_user_weekly_hours_start"
+        ),
+        db.CheckConstraint(
+            "weekly_hours >= 0",
+            name="ck_user_weekly_hours_non_negative"
+        ),
+        db.CheckConstraint(
+            "end_date IS NULL OR end_date >= start_date",
+            name="ck_user_weekly_hours_dates"
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    weekly_hours = db.Column(db.Integer, nullable=False)
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
+
+    def __repr__(self):
+        return (
+            f"<UserWeeklyHoursPeriod U{self.user_id} "
+            f"{self.start_date}-{self.end_date or 'actual'} "
+            f"{self.weekly_hours}h>"
+        )
+
 
 class TimeRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)

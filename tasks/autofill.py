@@ -12,6 +12,7 @@ from flask import current_app
 
 from models.database import db
 from models.models import EmployeeStatus, TimeRecord, User
+from services.weekly_hours import weekly_hours_for_week
 
 
 AUTO_FILL_RECORD_NOTE = "AA"
@@ -166,7 +167,8 @@ def _autofill_user_week(
         full_name=user.full_name,
     )
 
-    required_seconds = int((user.weekly_hours or 0) * 3600)
+    target_weekly_hours = weekly_hours_for_week(user, week_start)
+    required_seconds = int(target_weekly_hours * 3600)
     if required_seconds <= 0:
         return user_result
 
@@ -202,9 +204,19 @@ def _autofill_user_week(
         return user_result
 
     user_templates = _build_user_history_templates(user.id, week_start)
-    group_templates = _get_group_templates(user, week_start, pattern_cache)
+    group_templates = _get_group_templates(
+        user,
+        week_start,
+        pattern_cache,
+        target_weekly_hours,
+    )
     current_week_template = _template_from_records(records, "semana actual")
-    candidate_weekdays = _candidate_weekdays(user, user_templates, group_templates)
+    candidate_weekdays = _candidate_weekdays(
+        user,
+        target_weekly_hours,
+        user_templates,
+        group_templates,
+    )
 
     for weekday in candidate_weekdays:
         if remaining_seconds <= 0:
@@ -226,6 +238,7 @@ def _autofill_user_week(
 
         template = _select_template(
             user,
+            target_weekly_hours,
             weekday,
             remaining_seconds,
             user_templates,
@@ -294,8 +307,9 @@ def _get_group_templates(
     user: User,
     week_start: date,
     cache: dict[tuple[str, str, int], dict[int, ShiftTemplate]],
+    weekly_hours: int,
 ) -> dict[int, ShiftTemplate]:
-    weekly_hours = int(user.weekly_hours or 0)
+    weekly_hours = int(weekly_hours or 0)
     category = user.categoria or ""
     primary_key = ("category", category, weekly_hours)
     if primary_key not in cache:
@@ -329,7 +343,6 @@ def _query_group_templates(
         .filter(
             User.is_admin.is_(False),
             User.is_active.is_(True),
-            User.weekly_hours == weekly_hours,
             TimeRecord.date >= history_start,
             TimeRecord.date < week_start,
             TimeRecord.check_in.isnot(None),
@@ -340,7 +353,12 @@ def _query_group_templates(
         query = query.filter(User.categoria == category)
 
     source = "histórico categoría" if category else "histórico jornada"
-    return _templates_by_weekday(query.all(), source)
+    records = [
+        record
+        for record in query.all()
+        if weekly_hours_for_week(record.user, record.date) == weekly_hours
+    ]
+    return _templates_by_weekday(records, source)
 
 
 def _templates_by_weekday(records: list[TimeRecord], source: str) -> dict[int, ShiftTemplate]:
@@ -389,13 +407,14 @@ def _template_from_records(records: list[TimeRecord], source: str) -> ShiftTempl
 
 def _candidate_weekdays(
     user: User,
+    weekly_hours: int,
     user_templates: dict[int, ShiftTemplate],
     group_templates: dict[int, ShiftTemplate],
 ) -> list[int]:
     if user_templates:
         return _append_missing_weekdays(_ordered_template_weekdays(user_templates))
 
-    generated = _generated_weekdays(user)
+    generated = _generated_weekdays(user, weekly_hours)
     if group_templates:
         group_rank = _ordered_template_weekdays(group_templates)
         ordered = [weekday for weekday in generated if weekday in group_rank]
@@ -424,8 +443,8 @@ def _append_missing_weekdays(weekdays: list[int]) -> list[int]:
     return result
 
 
-def _generated_weekdays(user: User) -> list[int]:
-    workday_count = _target_workday_count(user.weekly_hours or 0)
+def _generated_weekdays(user: User, weekly_hours: int) -> list[int]:
+    workday_count = _target_workday_count(weekly_hours or 0)
     options = [
         list(range(start, start + workday_count))
         for start in range(0, WEEK_DAYS - workday_count + 1)
@@ -439,7 +458,7 @@ def _generated_weekdays(user: User) -> list[int]:
         )
     ]
     valid_options = valid_options or options
-    index = _stable_number(user.id, user.categoria or "", user.weekly_hours or 0) % len(valid_options)
+    index = _stable_number(user.id, user.categoria or "", weekly_hours or 0) % len(valid_options)
     return valid_options[index]
 
 
@@ -457,6 +476,7 @@ def _target_workday_count(weekly_hours: int) -> int:
 
 def _select_template(
     user: User,
+    weekly_hours: int,
     weekday: int,
     remaining_seconds: int,
     user_templates: dict[int, ShiftTemplate],
@@ -475,8 +495,8 @@ def _select_template(
     if generic_template:
         return generic_template
 
-    workday_count = _target_workday_count(user.weekly_hours or 0)
-    default_seconds = max(60, int(((user.weekly_hours or 0) * 3600) / max(workday_count, 1)))
+    workday_count = _target_workday_count(weekly_hours or 0)
+    default_seconds = max(60, int(((weekly_hours or 0) * 3600) / max(workday_count, 1)))
     return ShiftTemplate(
         weekday=weekday,
         start_seconds=_generated_start_seconds(user),

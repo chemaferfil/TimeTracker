@@ -10,6 +10,7 @@ import logging
 
 from models.models import TimeRecord, User, EmployeeStatus
 from models.database import db
+from services.weekly_hours import weekly_hours_for_week
 from tasks.scheduler import close_open_record
 
 time_bp = Blueprint("time", __name__)
@@ -206,7 +207,7 @@ def dashboard_employee():
     ).all()
 
     worked_secs   = sum((r.check_out - r.check_in).total_seconds() for r in weekly_records)
-    allowed_secs  = (user.weekly_hours or 0) * 3600
+    allowed_secs  = weekly_hours_for_week(user, today) * 3600
     remain_secs   = max(allowed_secs - worked_secs, 0)
 
     recent = (

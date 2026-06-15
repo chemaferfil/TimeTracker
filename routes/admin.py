@@ -6,6 +6,12 @@ from functools import wraps
 from datetime import datetime, date, timedelta
 from models.models import User, TimeRecord, EmployeeStatus
 from models.database import db
+from services.weekly_hours import (
+    apply_weekly_hours_change,
+    available_weekly_hours_for_users,
+    ensure_weekly_hours_history,
+    weekly_hours_for_week,
+)
 
 admin_bp = Blueprint(
     "admin", __name__,
@@ -152,7 +158,7 @@ def dashboard():
     week_acc, records_with_accum = {}, []
     for rec in records:
         uid = rec.user_id
-        weekly_secs = rec.user.weekly_hours * 3600 if rec.user.weekly_hours else 0
+        weekly_secs = weekly_hours_for_week(rec.user, rec.date) * 3600
         dur = rec.check_out - rec.check_in if rec.check_in and rec.check_out else None
         secs = dur.total_seconds() if dur else 0
         prev = week_acc.get(uid, 0)
@@ -259,7 +265,8 @@ def add_user():
         except ValueError:
             flash("Formato de fecha inválido.", "danger")
             return render_template("user_form.html", user=None, action="add",
-                                   form_data=request.form, centro_admin=get_admin_centro())
+                                   form_data=request.form, centro_admin=get_admin_centro(),
+                                   today=date.today())
         # Super admin: centro vacío o "-- Sin categoría --"
         req_is_super  = (centro in (None, "-- Sin categoría --"))
         is_admin      = req_is_admin if can_grant_admin() else False
@@ -272,12 +279,14 @@ def add_user():
         if not all([username, password, full_name, email]) or weekly_hours is None:
             flash("Todos los campos son obligatorios.", "danger")
             return render_template("user_form.html", user=None, action="add",
-                                   form_data=request.form, centro_admin=get_admin_centro())
+                                   form_data=request.form, centro_admin=get_admin_centro(),
+                                   today=date.today())
 
         if User.query.filter((User.username == username) | (User.email == email)).first():
             flash("El nombre de usuario o el correo electrónico ya existen.", "danger")
             return render_template("user_form.html", user=None, action="add",
-                                   form_data=request.form, centro_admin=get_admin_centro())
+                                   form_data=request.form, centro_admin=get_admin_centro(),
+                                   today=date.today())
 
         new_user = User(
             username         = username,
@@ -293,12 +302,16 @@ def add_user():
         )
         new_user.set_password(password)
         db.session.add(new_user)
+        ensure_weekly_hours_history(
+            new_user,
+            start_date=hire_date or date.today(),
+        )
         db.session.commit()
 
         flash("Usuario creado correctamente.", "success")
         return redirect(url_for("admin.manage_users"))
 
-    return render_template("user_form.html", user=None, action="add", centro_admin=get_admin_centro())
+    return render_template("user_form.html", user=None, action="add", centro_admin=get_admin_centro(), today=date.today())
 
 @admin_bp.route("/users/edit/<int:user_id>", methods=["GET", "POST"])
 @admin_required
@@ -327,32 +340,58 @@ def edit_user(user_id):
            User.query.filter(User.username == new_username, User.id != user.id).first():
             flash("El nuevo nombre de usuario ya existe.", "danger")
             return render_template("user_form.html", user=user, action="edit",
-                                   form_data=request.form, centro_admin=get_admin_centro())
+                                   form_data=request.form, centro_admin=get_admin_centro(),
+                                   today=date.today())
         if new_email != user.email and \
            User.query.filter(User.email == new_email, User.id != user.id).first():
             flash("El nuevo correo electrónico ya existe.", "danger")
             return render_template("user_form.html", user=user, action="edit",
-                                   form_data=request.form, centro_admin=get_admin_centro())
+                                   form_data=request.form, centro_admin=get_admin_centro(),
+                                   today=date.today())
+        new_weekly_hours = request.form.get("weekly_hours", type=int)
+        if new_weekly_hours is None:
+            flash("Las horas semanales son obligatorias.", "danger")
+            return render_template("user_form.html", user=user, action="edit",
+                                   form_data=request.form, centro_admin=get_admin_centro(),
+                                   today=date.today())
+
+        old_weekly_hours = user.weekly_hours
 
         # campos simples
         user.username      = new_username
         user.email         = new_email
         user.full_name     = request.form.get("full_name")
-        user.weekly_hours  = request.form.get("weekly_hours", type=int)
         user.centro        = request.form.get("centro") or None
         user.categoria     = request.form.get("categoria") or None
-        
+
         # Fechas de alta y baja
         hire_date_str = request.form.get("hire_date")
         termination_date_str = request.form.get("termination_date")
-        
+        weekly_hours_effective_date_str = request.form.get("weekly_hours_effective_date")
+
         try:
             user.hire_date = datetime.strptime(hire_date_str, "%Y-%m-%d").date() if hire_date_str else None
             user.termination_date = datetime.strptime(termination_date_str, "%Y-%m-%d").date() if termination_date_str else None
+            weekly_hours_effective_date = (
+                datetime.strptime(weekly_hours_effective_date_str, "%Y-%m-%d").date()
+                if weekly_hours_effective_date_str else date.today()
+            )
         except ValueError:
             flash("Formato de fecha inválido.", "danger")
             return render_template("user_form.html", user=user, action="edit",
-                                   form_data=request.form, centro_admin=get_admin_centro())
+                                   form_data=request.form, centro_admin=get_admin_centro(),
+                                   today=date.today())
+
+        if old_weekly_hours != new_weekly_hours:
+            apply_weekly_hours_change(
+                user,
+                new_weekly_hours,
+                effective_date=weekly_hours_effective_date,
+                previous_weekly_hours=old_weekly_hours,
+            )
+        else:
+            user.weekly_hours = new_weekly_hours
+            ensure_weekly_hours_history(user, start_date=user.hire_date)
 
         if user.id != session.get("user_id"):
             user.is_admin  = request.form.get("is_admin")  == "on"
@@ -366,7 +405,7 @@ def edit_user(user_id):
         flash("Usuario actualizado.", "success")
         return redirect(url_for("admin.manage_users"))
 
-    return render_template("user_form.html", user=user, action="edit", centro_admin=get_admin_centro())
+    return render_template("user_form.html", user=user, action="edit", centro_admin=get_admin_centro(), today=date.today())
 
 @admin_bp.route("/users/delete/<int:user_id>", methods=["POST"])
 @admin_required
@@ -500,7 +539,7 @@ def manage_records():
         # Lunes de la semana correspondiente
         sow = rec.date - timedelta(days=rec.date.weekday())
         sow_str = sow.strftime('%Y-%m-%d')
-        wh_secs = rec.user.weekly_hours * 3600 if rec.user.weekly_hours else 0
+        wh_secs = weekly_hours_for_week(rec.user, rec.date) * 3600
 
         if uid not in weekly_acc:
             weekly_acc[uid] = {}
@@ -751,7 +790,7 @@ def api_centro_info():
 
     users = users.all()
     categorias = sorted(set(u.categoria for u in users if u.categoria))
-    horas = sorted(set(u.weekly_hours for u in users if u.weekly_hours is not None))
+    horas = available_weekly_hours_for_users(users)
     return jsonify({
         "usuarios": [{"id": u.id, "username": u.username, "full_name": u.full_name} for u in users],
         "categorias": categorias,
