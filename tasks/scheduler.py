@@ -40,8 +40,21 @@ def _today_in_app_timezone():
 
 
 def close_open_record(record: TimeRecord):
-    record_date = record.date
-    auto_close_time = datetime.combine(record_date, dt_time(23, 59, 59))
+    """
+    Close an open record at a plausible check-out based on the employee's
+    typical shift duration. Falls back to 23:59:59 of the record date when
+    no estimate is possible (e.g. employee without weekly hours or history).
+    """
+    from tasks.autofill import estimate_auto_close_time
+
+    auto_close_time = None
+    try:
+        auto_close_time = estimate_auto_close_time(record)
+    except Exception:
+        auto_close_time = None
+    if auto_close_time is None:
+        auto_close_time = datetime.combine(record.date, dt_time(23, 59, 59))
+
     record.check_out = auto_close_time
     record.notes = (record.notes or "") + (" - " if record.notes else "") + AUTO_CLOSE_NOTE
     return auto_close_time
@@ -49,7 +62,8 @@ def close_open_record(record: TimeRecord):
 
 def auto_close_open_records(include_today: bool = True, app=None):
     """
-    Auto-close open time records at 23:59:59 of their respective dates.
+    Auto-close open time records at a plausible check-out time based on each
+    employee's usual shift (fallback: 23:59:59 of the record date).
     Intended to be called daily by the scheduler or by an external cron job.
 
     Args:

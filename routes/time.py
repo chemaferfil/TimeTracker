@@ -51,7 +51,12 @@ def check_in():
     if existing_open and existing_open.date < date.today():
         close_open_record(existing_open)
         db.session.commit()
-        flash("Se cerró automáticamente tu fichaje pendiente de ayer a las 23:59.", "info")
+        flash(
+            f"Se cerró automáticamente tu fichaje pendiente del "
+            f"{existing_open.date.strftime('%d-%m-%Y')} a las "
+            f"{existing_open.check_out.strftime('%H:%M')}.",
+            "info",
+        )
         existing_open = None
     if existing_open:
         # Permite al usuario cerrarlo desde aquí

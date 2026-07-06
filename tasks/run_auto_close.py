@@ -2,8 +2,9 @@
 Entry point for Render Cron Job.
 
 This script closes any open time records from previous days by setting their
-check_out to 23:59:59 of their respective dates. It is safe to run after
-midnight because it does not close today's records.
+check_out to a plausible time based on each employee's usual shift duration
+(falling back to 23:59:59 of the record date when no estimate is possible).
+It is safe to run after midnight because it does not close today's records.
 
 On Mondays in the app timezone, it also auto-fills the previous completed
 week for active employees using historical/category work patterns.
