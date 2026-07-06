@@ -597,6 +597,80 @@ def autofill_week_records():
 
     return redirect(url_for("admin.manage_records", page=page))
 
+
+@admin_bp.route("/records/backfill", methods=["POST"])
+@admin_required
+def backfill_records():
+    """
+    Aplica el fichaje automático a un rango de semanas ya cerradas (por defecto
+    junio y julio del año en curso). Pensado para regularizar datos "antiguos"
+    desde la web, sin necesidad de consola. Con «Simular» solo muestra lo que
+    haría; con «Aplicar» lo ejecuta de verdad. Es idempotente.
+    """
+    dry_run = request.form.get("mode") != "apply"
+    page = request.form.get("page", type=int, default=1)
+
+    today = date.today()
+    date_from = request.form.get("date_from")
+    date_to = request.form.get("date_to")
+    try:
+        range_start = (
+            datetime.strptime(date_from, "%Y-%m-%d").date()
+            if date_from else date(today.year, 6, 1)
+        )
+        range_end = (
+            datetime.strptime(date_to, "%Y-%m-%d").date()
+            if date_to else min(date(today.year, 7, 31), today)
+        )
+    except ValueError:
+        flash("Fechas no válidas para el backfill.", "danger")
+        return redirect(url_for("admin.manage_records", page=page))
+
+    centro = get_admin_centro()
+
+    try:
+        from tasks.backfill_range import backfill_range
+
+        summary = backfill_range(
+            range_start,
+            range_end,
+            today=today,
+            dry_run=dry_run,
+            centro=centro,
+            modified_by=session.get("user_id"),
+            verbose=False,
+        )
+    except Exception as e:
+        flash(f"Error al ejecutar el backfill: {str(e)}", "danger")
+        return redirect(url_for("admin.manage_records", page=page))
+
+    prefix = "SIMULACIÓN — " if dry_run else ""
+    hours = summary["created_seconds"] / 3600
+    if not summary["weeks"]:
+        flash(
+            f"{prefix}No hay semanas completas en el rango "
+            f"{range_start} … {range_end}.",
+            "warning",
+        )
+    elif dry_run:
+        flash(
+            f"{prefix}{len(summary['weeks'])} semana(s): se cerrarían "
+            f"{summary['closed']} fichaje(s) abierto(s) y se crearían "
+            f"{summary['created_records']} registro(s) ({hours:.1f}h). "
+            "Pulsa «Aplicar backfill» para confirmarlo.",
+            "info",
+        )
+    else:
+        flash(
+            f"Backfill aplicado a {len(summary['weeks'])} semana(s): "
+            f"{summary['closed']} fichaje(s) cerrado(s) y "
+            f"{summary['created_records']} registro(s) creado(s) ({hours:.1f}h).",
+            "success",
+        )
+
+    return redirect(url_for("admin.manage_records", page=page))
+
+
 @admin_bp.route("/records/edit/<int:record_id>", methods=["GET", "POST"])
 @admin_required
 def edit_record(record_id):

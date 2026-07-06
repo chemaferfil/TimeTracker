@@ -54,14 +54,19 @@ def _week_starts(range_start: date, range_end: date, today: date) -> list[date]:
     return weeks
 
 
-def _close_open_records_in_week(week_start: date) -> int:
+def _close_open_records_in_week(week_start: date, centro: str | None = None) -> int:
+    from models.models import User
+
     week_end = week_start + timedelta(days=6)
-    open_records = TimeRecord.query.filter(
+    query = TimeRecord.query.filter(
         TimeRecord.date >= week_start,
         TimeRecord.date <= week_end,
         TimeRecord.check_in.isnot(None),
         TimeRecord.check_out.is_(None),
-    ).all()
+    )
+    if centro:
+        query = query.join(User, TimeRecord.user_id == User.id).filter(User.centro == centro)
+    open_records = query.all()
     for record in open_records:
         close_open_record(record)
     return len(open_records)
@@ -73,7 +78,16 @@ def backfill_range(
     app=None,
     today: date | None = None,
     dry_run: bool = False,
+    centro: str | None = None,
+    modified_by: int | None = None,
+    verbose: bool = True,
 ):
+    """
+    Apply the auto-fill logic to already-completed weeks in a date range.
+
+    Returns a dict with per-week detail and totals so callers (CLI or web) can
+    render a summary. Idempotent and safe to run multiple times.
+    """
     from tasks.autofill import _get_app  # reutiliza la resolución de app
 
     app = _get_app(app)
@@ -83,47 +97,72 @@ def backfill_range(
     today = today or date.today()
     weeks = _week_starts(range_start, range_end, today)
 
-    print(
-        f"Backfill de {range_start} a {range_end} "
-        f"({'SIMULACIÓN' if dry_run else 'APLICANDO'}) — "
-        f"{len(weeks)} semana(s) completa(s)."
-    )
+    if verbose:
+        print(
+            f"Backfill de {range_start} a {range_end} "
+            f"({'SIMULACIÓN' if dry_run else 'APLICANDO'}) — "
+            f"{len(weeks)} semana(s) completa(s)."
+        )
 
-    totals = {"closed": 0, "created_records": 0, "created_seconds": 0}
+    summary = {
+        "dry_run": dry_run,
+        "weeks": [],
+        "closed": 0,
+        "created_records": 0,
+        "created_seconds": 0,
+    }
     for week_start in weeks:
         with app.app_context():
             try:
-                closed = _close_open_records_in_week(week_start)
+                closed = _close_open_records_in_week(week_start, centro=centro)
                 if not dry_run:
                     db.session.commit()
                 else:
                     db.session.flush()
 
-                result = autofill_week(week_start, app=app, commit=not dry_run)
+                result = autofill_week(
+                    week_start,
+                    app=app,
+                    centro=centro,
+                    modified_by=modified_by,
+                    commit=not dry_run,
+                )
+                skipped = [f"{u.username}: {u.skipped_reason}" for u in result.skipped_users]
             except Exception:
                 db.session.rollback()
                 raise
+            finally:
+                if dry_run:
+                    db.session.rollback()
 
-        totals["closed"] += closed
-        totals["created_records"] += result.created_records
-        totals["created_seconds"] += result.created_seconds
-        skipped = [f"{u.username}: {u.skipped_reason}" for u in result.skipped_users]
+        week_info = {
+            "week_start": week_start,
+            "week_end": week_start + timedelta(days=6),
+            "closed": closed,
+            "created_records": result.created_records,
+            "created_seconds": result.created_seconds,
+            "skipped": skipped,
+        }
+        summary["weeks"].append(week_info)
+        summary["closed"] += closed
+        summary["created_records"] += result.created_records
+        summary["created_seconds"] += result.created_seconds
+
+        if verbose:
+            print(
+                f"  Semana {week_start} … {week_info['week_end']}: "
+                f"{closed} cerrado(s), {result.created_records} creado(s), "
+                f"{result.created_seconds / 3600:.1f}h"
+                + (f"  | omitidos: {', '.join(skipped)}" if skipped else "")
+            )
+
+    if verbose:
         print(
-            f"  Semana {week_start} … {week_start + timedelta(days=6)}: "
-            f"{closed} cerrado(s), {result.created_records} creado(s), "
-            f"{result.created_seconds / 3600:.1f}h"
-            + (f"  | omitidos: {', '.join(skipped)}" if skipped else "")
+            f"TOTAL: {summary['closed']} fichaje(s) cerrado(s), "
+            f"{summary['created_records']} registro(s) creado(s), "
+            f"{summary['created_seconds'] / 3600:.1f}h."
         )
-        if dry_run:
-            with app.app_context():
-                db.session.rollback()
-
-    print(
-        f"TOTAL: {totals['closed']} fichaje(s) cerrado(s), "
-        f"{totals['created_records']} registro(s) creado(s), "
-        f"{totals['created_seconds'] / 3600:.1f}h."
-    )
-    return totals
+    return summary
 
 
 def main(argv: list[str]) -> None:

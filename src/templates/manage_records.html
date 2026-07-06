@@ -29,6 +29,39 @@
       </form>
     </div>
 
+    <!-- Regularizar datos antiguos (backfill de un rango de semanas cerradas) -->
+    <div class="bg-gray-900/60 border border-gray-700 rounded-lg p-4 mb-4">
+      <h3 class="text-sm font-semibold text-gray-200 mb-1">Regularizar fichajes antiguos</h3>
+      <p class="text-xs text-gray-400 mb-3">
+        Aplica el fichaje automático a un rango de semanas ya cerradas (cierra los fichajes
+        abiertos y completa los días que falten). Por defecto <strong>junio y julio</strong>.
+        Es seguro repetirlo: no duplica registros. Usa primero «Simular» para ver qué haría.
+      </p>
+      <form method="POST" action="{{ url_for('admin.backfill_records') }}"
+            class="flex flex-wrap gap-3 items-end">
+        <input type="hidden" name="page" value="{{ page }}">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Desde (opcional)</label>
+          <input type="date" name="date_from"
+                 class="px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700" />
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Hasta (opcional)</label>
+          <input type="date" name="date_to"
+                 class="px-3 py-2 rounded bg-gray-800 text-gray-200 border border-gray-700" />
+        </div>
+        <button type="submit" name="mode" value="preview"
+                class="px-3 py-2 rounded text-white bg-sky-700 hover:bg-sky-600">
+          Simular
+        </button>
+        <button type="submit" name="mode" value="apply"
+                onclick="return confirm('¿Aplicar el backfill al rango indicado? Esta acción crea y cierra fichajes en semanas ya cerradas.')"
+                class="px-3 py-2 rounded text-white bg-emerald-700 hover:bg-emerald-600">
+          Aplicar backfill
+        </button>
+      </form>
+    </div>
+
     <!-- Filtros -->
     <form method="get" action="{{ url_for('admin.manage_records') }}" class="grid grid-cols-1 md:grid-cols-8 gap-3 items-end">
       <input type="hidden" name="page" value="{{ page }}" />
