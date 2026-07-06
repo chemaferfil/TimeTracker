@@ -5,7 +5,8 @@ from flask import Flask
 
 from models.database import db
 from models.models import EmployeeStatus, TimeRecord, User
-from tasks.autofill import autofill_week
+from tasks.autofill import autofill_week, estimate_auto_close_time
+from tasks.scheduler import close_open_record
 
 
 class AutoFillWeekTestCase(unittest.TestCase):
@@ -127,6 +128,123 @@ class AutoFillWeekTestCase(unittest.TestCase):
         self.assertGreater(result.created_records, 0)
         self.assertEqual(TimeRecord.query.filter_by(user_id=user.id).count(), result.created_records)
         self.assertEqual(self._worked_seconds(user), 8 * 3600)
+
+    def _full_history_weeks(self, user, weeks=4, start_hour=9, hours=8, days=5):
+        for weeks_back in range(1, weeks + 1):
+            monday = self.week_start - timedelta(days=7 * weeks_back)
+            for offset in range(days):
+                self._record(user, monday + timedelta(days=offset), start_hour=start_hour, hours=hours)
+
+    def test_auto_close_uses_plausible_exit_time(self):
+        user = self._user("sinSalida40", weekly_hours=40)
+        self._full_history_weeks(user)
+
+        open_record = TimeRecord(
+            user_id=user.id,
+            date=self.week_start,
+            check_in=datetime.combine(self.week_start, time(9, 3)),
+        )
+        db.session.add(open_record)
+        db.session.commit()
+
+        close_open_record(open_record)
+        db.session.commit()
+
+        self.assertIsNotNone(open_record.check_out)
+        self.assertEqual(open_record.check_out.date(), self.week_start)
+        self.assertIn("CA", open_record.notes)
+        # Duración típica 8h con jitter de ±5 minutos sobre las 17:03.
+        self.assertGreaterEqual(open_record.check_out, datetime.combine(self.week_start, time(16, 58)))
+        self.assertLessEqual(open_record.check_out, datetime.combine(self.week_start, time(17, 8)))
+
+    def test_auto_close_falls_back_without_pattern(self):
+        user = self._user("sinPatron0", weekly_hours=0)
+        open_record = TimeRecord(
+            user_id=user.id,
+            date=self.week_start,
+            check_in=datetime.combine(self.week_start, time(9, 0)),
+        )
+        db.session.add(open_record)
+        db.session.commit()
+
+        close_open_record(open_record)
+        db.session.commit()
+
+        self.assertEqual(
+            open_record.check_out,
+            datetime.combine(self.week_start, time(23, 59, 59)),
+        )
+
+    def test_legacy_auto_closed_records_do_not_pollute_estimate(self):
+        user = self._user("historialCA", weekly_hours=40)
+        for weeks_back in (1, 2, 3):
+            day = self.week_start - timedelta(days=7 * weeks_back)
+            check_in = datetime.combine(day, time(9, 0))
+            db.session.add(TimeRecord(
+                user_id=user.id,
+                date=day,
+                check_in=check_in,
+                check_out=datetime.combine(day, time(23, 59, 59)),
+                notes="CA",
+            ))
+        db.session.commit()
+
+        open_record = TimeRecord(
+            user_id=user.id,
+            date=self.week_start,
+            check_in=datetime.combine(self.week_start, time(9, 0)),
+        )
+        db.session.add(open_record)
+        db.session.commit()
+
+        estimate = estimate_auto_close_time(open_record)
+
+        # Sin patrón usable cae a horas_semanales/5 = 8h, nunca a ~15h.
+        self.assertIsNotNone(estimate)
+        self.assertLessEqual(estimate, datetime.combine(self.week_start, time(17, 10)))
+
+    def test_partial_day_is_topped_up_with_missing_shift(self):
+        user = self._user("parcial40", weekly_hours=40)
+        self._full_history_weeks(user)
+
+        # Lunes solo turno de mañana (4h de las 8h esperadas).
+        self._record(user, self.week_start, start_hour=9, hours=4)
+
+        result = autofill_week(self.week_start, app=self.app)
+        user_result = result.user_results[0]
+
+        monday_records = TimeRecord.query.filter_by(
+            user_id=user.id, date=self.week_start
+        ).order_by(TimeRecord.check_in).all()
+        self.assertEqual(len(monday_records), 2)
+        top_up = monday_records[1]
+        self.assertEqual(top_up.notes, "AA")
+        # Empieza tras la última salida (13:00) más un descanso con jitter.
+        self.assertGreater(top_up.check_in, monday_records[0].check_out)
+
+        week_records = TimeRecord.query.filter(
+            TimeRecord.user_id == user.id,
+            TimeRecord.date >= self.week_start,
+            TimeRecord.date <= self.week_start + timedelta(days=6),
+        ).all()
+        week_seconds = sum(
+            int((r.check_out - r.check_in).total_seconds()) for r in week_records
+        )
+        self.assertEqual(week_seconds, 40 * 3600)
+        self.assertEqual(user_result.remaining_seconds, 0)
+
+    def test_full_day_is_not_topped_up(self):
+        user = self._user("completo40", weekly_hours=40)
+        self._full_history_weeks(user)
+
+        self._record(user, self.week_start, start_hour=9, hours=8)
+
+        autofill_week(self.week_start, app=self.app)
+
+        self.assertEqual(
+            TimeRecord.query.filter_by(user_id=user.id, date=self.week_start).count(),
+            1,
+        )
 
     def test_running_twice_does_not_duplicate_records(self):
         user = self._user("idempotente", weekly_hours=8)

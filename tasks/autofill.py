@@ -17,10 +17,15 @@ from models.models import EmployeeStatus, TimeRecord, User
 AUTO_FILL_RECORD_NOTE = "AA"
 LEGACY_AUTO_FILL_NOTE = "Autofichaje automático"
 AUTO_FILL_SEED = "autofill"
+AUTO_CLOSE_SEED = "autoclose"
+TOP_UP_SEED = "topup"
 BLOCKING_STATUSES = {"Baja", "Ausente", "Vacaciones"}
 HISTORY_WEEKS = 8
 JITTER_MINUTES = 5
 WEEK_DAYS = 7
+TOP_UP_BREAK_MINUTES = 60
+MIN_TOP_UP_SECONDS = 30 * 60
+LEGACY_AUTO_CLOSE_TIME = dt_time(23, 59, 59)
 
 
 @dataclass
@@ -30,6 +35,13 @@ class ShiftTemplate:
     duration_seconds: int
     count: int
     source: str
+
+
+@dataclass
+class DayPattern:
+    weekday: int
+    total_seconds: int
+    second_start_seconds: int | None
 
 
 @dataclass
@@ -195,14 +207,36 @@ def _autofill_user_week(
     if remaining_seconds <= 0:
         return user_result
 
-    record_dates = {record.date for record in records}
+    history_records = _user_history_records(user.id, week_start)
+    user_templates = _templates_by_weekday(history_records, "histórico empleado")
+    user_day_patterns = _day_patterns_by_weekday(history_records)
+    group_templates, group_day_patterns = _get_group_history(user, week_start, pattern_cache)
+
+    records_by_date: dict[date, list[TimeRecord]] = {}
+    for record in records:
+        records_by_date.setdefault(record.date, []).append(record)
+
+    remaining_seconds = _top_up_partial_days(
+        user,
+        week_days,
+        records_by_date,
+        status_by_date,
+        remaining_seconds,
+        user_day_patterns,
+        group_day_patterns,
+        modified_by,
+        user_result,
+    )
+    user_result.remaining_seconds = remaining_seconds
+    if remaining_seconds <= 0:
+        return user_result
+
+    record_dates = set(records_by_date)
     final_work_dates = set(record_dates)
     if not _has_two_consecutive_days_off(final_work_dates, week_days):
         user_result.skipped_reason = "la semana ya no tiene dos días seguidos libres"
         return user_result
 
-    user_templates = _build_user_history_templates(user.id, week_start)
-    group_templates = _get_group_templates(user, week_start, pattern_cache)
     current_week_template = _template_from_records(records, "semana actual")
     candidate_weekdays = _candidate_weekdays(user, user_templates, group_templates)
 
@@ -278,38 +312,38 @@ def _autofill_user_week(
     return user_result
 
 
-def _build_user_history_templates(user_id: int, week_start: date) -> dict[int, ShiftTemplate]:
+def _user_history_records(user_id: int, week_start: date) -> list[TimeRecord]:
     history_start = week_start - timedelta(days=HISTORY_WEEKS * 7)
-    records = TimeRecord.query.filter(
+    return TimeRecord.query.filter(
         TimeRecord.user_id == user_id,
         TimeRecord.date >= history_start,
         TimeRecord.date < week_start,
         TimeRecord.check_in.isnot(None),
         TimeRecord.check_out.isnot(None),
     ).all()
-    return _templates_by_weekday(records, "histórico empleado")
 
 
-def _get_group_templates(
+def _get_group_history(
     user: User,
     week_start: date,
-    cache: dict[tuple[str, str, int], dict[int, ShiftTemplate]],
-) -> dict[int, ShiftTemplate]:
+    cache: dict[tuple[str, str, int], tuple[dict[int, ShiftTemplate], dict[int, DayPattern]]],
+) -> tuple[dict[int, ShiftTemplate], dict[int, DayPattern]]:
     weekly_hours = int(user.weekly_hours or 0)
     category = user.categoria or ""
     primary_key = ("category", category, weekly_hours)
     if primary_key not in cache:
-        cache[primary_key] = _query_group_templates(
+        cache[primary_key] = _build_group_history(
             week_start,
             weekly_hours=weekly_hours,
             category=user.categoria,
         )
-    if cache[primary_key]:
+    templates, day_patterns = cache[primary_key]
+    if templates or day_patterns:
         return cache[primary_key]
 
     fallback_key = ("weekly_hours", "", weekly_hours)
     if fallback_key not in cache:
-        cache[fallback_key] = _query_group_templates(
+        cache[fallback_key] = _build_group_history(
             week_start,
             weekly_hours=weekly_hours,
             category=None,
@@ -317,11 +351,11 @@ def _get_group_templates(
     return cache[fallback_key]
 
 
-def _query_group_templates(
+def _build_group_history(
     week_start: date,
     weekly_hours: int,
     category: str | None,
-) -> dict[int, ShiftTemplate]:
+) -> tuple[dict[int, ShiftTemplate], dict[int, DayPattern]]:
     history_start = week_start - timedelta(days=HISTORY_WEEKS * 7)
     query = (
         TimeRecord.query
@@ -339,14 +373,26 @@ def _query_group_templates(
     if category:
         query = query.filter(User.categoria == category)
 
+    records = query.all()
     source = "histórico categoría" if category else "histórico jornada"
-    return _templates_by_weekday(query.all(), source)
+    return _templates_by_weekday(records, source), _day_patterns_by_weekday(records)
+
+
+def _is_template_record(record: TimeRecord) -> bool:
+    if LEGACY_AUTO_FILL_NOTE in (record.notes or ""):
+        return False
+    if not record.check_in or not record.check_out:
+        return False
+    # Los cierres automáticos al final del día no representan turnos reales.
+    if record.check_out.time() == LEGACY_AUTO_CLOSE_TIME:
+        return False
+    return True
 
 
 def _templates_by_weekday(records: list[TimeRecord], source: str) -> dict[int, ShiftTemplate]:
     grouped: dict[int, list[tuple[int, int]]] = {}
     for record in records:
-        if LEGACY_AUTO_FILL_NOTE in (record.notes or ""):
+        if not _is_template_record(record):
             continue
         duration_seconds = _record_seconds(record)
         if duration_seconds <= 0:
@@ -369,9 +415,230 @@ def _templates_by_weekday(records: list[TimeRecord], source: str) -> dict[int, S
     return templates
 
 
+def _day_patterns_by_weekday(records: list[TimeRecord]) -> dict[int, DayPattern]:
+    per_day: dict[tuple[int, date], list[TimeRecord]] = {}
+    for record in records:
+        if not _is_template_record(record) or _record_seconds(record) <= 0:
+            continue
+        per_day.setdefault((record.user_id, record.date), []).append(record)
+
+    totals: dict[int, list[int]] = {}
+    second_starts: dict[int, list[int]] = {}
+    for (_, day), day_records in per_day.items():
+        weekday = day.weekday()
+        totals.setdefault(weekday, []).append(
+            sum(_record_seconds(record) for record in day_records)
+        )
+        if len(day_records) > 1:
+            ordered = sorted(day_records, key=lambda record: record.check_in)
+            second_starts.setdefault(weekday, []).append(
+                _time_to_seconds(ordered[1].check_in.time())
+            )
+
+    patterns = {}
+    for weekday, values in totals.items():
+        starts = second_starts.get(weekday)
+        patterns[weekday] = DayPattern(
+            weekday=weekday,
+            total_seconds=_median_int(values),
+            second_start_seconds=_median_int(starts) if starts else None,
+        )
+    return patterns
+
+
+def _expected_day_seconds(
+    user: User,
+    weekday: int,
+    user_day_patterns: dict[int, DayPattern],
+    group_day_patterns: dict[int, DayPattern],
+) -> int:
+    pattern = user_day_patterns.get(weekday) or group_day_patterns.get(weekday)
+    if pattern:
+        return pattern.total_seconds
+    if user_day_patterns:
+        return _median_int([item.total_seconds for item in user_day_patterns.values()])
+    if group_day_patterns:
+        return _median_int([item.total_seconds for item in group_day_patterns.values()])
+    weekly_hours = user.weekly_hours or 0
+    return int((weekly_hours * 3600) / max(_target_workday_count(weekly_hours), 1))
+
+
+def _second_shift_start_seconds(
+    weekday: int,
+    user_day_patterns: dict[int, DayPattern],
+    group_day_patterns: dict[int, DayPattern],
+) -> int | None:
+    for patterns in (user_day_patterns, group_day_patterns):
+        pattern = patterns.get(weekday)
+        if pattern and pattern.second_start_seconds is not None:
+            return pattern.second_start_seconds
+    for patterns in (user_day_patterns, group_day_patterns):
+        starts = [
+            item.second_start_seconds
+            for item in patterns.values()
+            if item.second_start_seconds is not None
+        ]
+        if starts:
+            return _median_int(starts)
+    return None
+
+
+def _top_up_partial_days(
+    user: User,
+    week_days: list[date],
+    records_by_date: dict[date, list[TimeRecord]],
+    status_by_date: dict[date, EmployeeStatus],
+    remaining_seconds: int,
+    user_day_patterns: dict[int, DayPattern],
+    group_day_patterns: dict[int, DayPattern],
+    modified_by,
+    user_result: AutoFillUserResult,
+) -> int:
+    """
+    Complete days where the employee clocked part of the day (e.g. only the
+    morning shift) by adding the missing shift up to the expected daily total.
+    """
+    for day in week_days:
+        if remaining_seconds <= 0:
+            break
+
+        day_records = records_by_date.get(day)
+        if not day_records:
+            continue
+        if any(record.check_in is None or record.check_out is None for record in day_records):
+            continue
+        if not _is_employee_active_on_day(user, day):
+            continue
+
+        status = status_by_date.get(day)
+        if status and status.status in BLOCKING_STATUSES:
+            continue
+
+        worked_day = sum(_record_seconds(record) for record in day_records)
+        expected_day = _expected_day_seconds(
+            user, day.weekday(), user_day_patterns, group_day_patterns
+        )
+        deficit = expected_day - worked_day
+        if deficit < MIN_TOP_UP_SECONDS:
+            continue
+
+        seconds_to_create = min(deficit, remaining_seconds)
+        last_out = max(record.check_out for record in day_records)
+        start = _top_up_start(user, day, last_out, user_day_patterns, group_day_patterns)
+        max_end = datetime.combine(day, dt_time(23, 59, 59))
+        if start >= max_end:
+            continue
+        end = min(start + timedelta(seconds=seconds_to_create), max_end)
+        created_seconds = int((end - start).total_seconds())
+        if created_seconds <= 0:
+            continue
+
+        first_in = min(record.check_in for record in day_records)
+        db.session.add(TimeRecord(
+            user_id=user.id,
+            check_in=start,
+            check_out=end,
+            date=day,
+            notes=AUTO_FILL_RECORD_NOTE,
+            modified_by=modified_by,
+        ))
+
+        if status:
+            status.status = "Trabajado"
+            if status.entry_time is None:
+                status.entry_time = first_in.time()
+            status.exit_time = end.time()
+        else:
+            db.session.add(EmployeeStatus(
+                user_id=user.id,
+                date=day,
+                status="Trabajado",
+                entry_time=first_in.time(),
+                exit_time=end.time(),
+                notes=AUTO_FILL_RECORD_NOTE,
+            ))
+
+        remaining_seconds -= created_seconds
+        user_result.created_records += 1
+        user_result.created_seconds += created_seconds
+        user_result.remaining_seconds = remaining_seconds
+        user_result.pattern_source = "completado de día parcial"
+
+    return remaining_seconds
+
+
+def _top_up_start(
+    user: User,
+    day: date,
+    last_out: datetime,
+    user_day_patterns: dict[int, DayPattern],
+    group_day_patterns: dict[int, DayPattern],
+) -> datetime:
+    jitter = timedelta(minutes=_stable_minute_offset(user.id, day, TOP_UP_SEED))
+    minimum_start = last_out + timedelta(minutes=15)
+
+    second_start = _second_shift_start_seconds(
+        day.weekday(), user_day_patterns, group_day_patterns
+    )
+    if second_start is not None:
+        start = datetime.combine(day, dt_time(0, 0)) + timedelta(seconds=second_start) + jitter
+        if start >= minimum_start:
+            return start
+
+    return last_out + timedelta(minutes=TOP_UP_BREAK_MINUTES) + jitter
+
+
+def estimate_auto_close_time(record: TimeRecord) -> datetime | None:
+    """
+    Estimate a plausible check-out for an open record, based on the employee's
+    typical shift duration (own history, then group history, then weekly hours).
+    Returns None when no sensible estimate can be made.
+    """
+    if not record.check_in:
+        return None
+    user = db.session.get(User, record.user_id)
+    if user is None:
+        return None
+
+    week_start = normalize_week_start(record.date)
+    history_records = _user_history_records(user.id, week_start)
+    user_templates = _templates_by_weekday(history_records, "histórico empleado")
+    weekday = record.date.weekday()
+
+    template = user_templates.get(weekday)
+    if template is None:
+        group_templates, _ = _get_group_history(user, week_start, {})
+        template = (
+            group_templates.get(weekday)
+            or _strongest_template(user_templates)
+            or _strongest_template(group_templates)
+        )
+
+    if template is not None:
+        duration_seconds = template.duration_seconds
+    else:
+        weekly_hours = user.weekly_hours or 0
+        if weekly_hours <= 0:
+            return None
+        duration_seconds = int((weekly_hours * 3600) / _target_workday_count(weekly_hours))
+
+    duration_seconds += 60 * _stable_minute_offset(user.id, record.date, AUTO_CLOSE_SEED)
+    duration_seconds = max(duration_seconds, 60)
+
+    check_out = record.check_in + timedelta(seconds=duration_seconds)
+    max_end = datetime.combine(record.date, dt_time(23, 59, 59))
+    if check_out > max_end:
+        check_out = max_end
+    if check_out <= record.check_in:
+        return None
+    return check_out
+
+
 def _template_from_records(records: list[TimeRecord], source: str) -> ShiftTemplate | None:
     values = []
     for record in records:
+        if not _is_template_record(record):
+            continue
         duration_seconds = _record_seconds(record)
         if duration_seconds <= 0 or not record.check_in:
             continue
@@ -567,8 +834,8 @@ def _median_int(values: list[int]) -> int:
     return int((ordered[index - 1] + ordered[index]) / 2)
 
 
-def _stable_minute_offset(user_id: int, day: date) -> int:
-    return _stable_number(user_id, day.isoformat(), AUTO_FILL_SEED) % (JITTER_MINUTES * 2 + 1) - JITTER_MINUTES
+def _stable_minute_offset(user_id: int, day: date, seed: str = AUTO_FILL_SEED) -> int:
+    return _stable_number(user_id, day.isoformat(), seed) % (JITTER_MINUTES * 2 + 1) - JITTER_MINUTES
 
 
 def _stable_number(*parts) -> int:
