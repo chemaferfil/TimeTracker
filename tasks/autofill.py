@@ -19,12 +19,20 @@ LEGACY_AUTO_FILL_NOTE = "Autofichaje automático"
 AUTO_FILL_SEED = "autofill"
 AUTO_CLOSE_SEED = "autoclose"
 TOP_UP_SEED = "topup"
+DURATION_SEED = "duration"
+SHORTFALL_SEED = "shortfall"
 BLOCKING_STATUSES = {"Baja", "Ausente", "Vacaciones"}
 HISTORY_WEEKS = 8
 JITTER_MINUTES = 5
+DURATION_JITTER_MINUTES = 6
 WEEK_DAYS = 7
 TOP_UP_BREAK_MINUTES = 60
 MIN_TOP_UP_SECONDS = 30 * 60
+MIN_FILL_SECONDS = 15 * 60
+# La semana no debe cuadrar clavada al contrato: se deja por debajo un margen
+# variable por empleado y semana (entre estos dos porcentajes, en puntos básicos).
+WEEKLY_SHORTFALL_MIN_BP = 150
+WEEKLY_SHORTFALL_MAX_BP = 600
 LEGACY_AUTO_CLOSE_TIME = dt_time(23, 59, 59)
 
 
@@ -136,7 +144,7 @@ def _autofill_week_impl(
     week_days = [week_start + timedelta(days=i) for i in range(WEEK_DAYS)]
     week_end = week_days[-1]
     result = AutoFillResult(week_start=week_start)
-    pattern_cache: dict[tuple[str, str, int], dict[int, ShiftTemplate]] = {}
+    pattern_cache: dict[tuple[str, str, int], tuple[dict[int, ShiftTemplate], dict[int, DayPattern]]] = {}
 
     query = User.query.filter(
         User.is_admin.is_(False),
@@ -170,7 +178,7 @@ def _autofill_user_week(
     week_start: date,
     week_end: date,
     modified_by,
-    pattern_cache: dict[tuple[str, str, int], dict[int, ShiftTemplate]],
+    pattern_cache: dict[tuple[str, str, int], tuple[dict[int, ShiftTemplate], dict[int, DayPattern]]],
 ):
     user_result = AutoFillUserResult(
         user_id=user.id,
@@ -202,10 +210,13 @@ def _autofill_user_week(
     status_by_date = {status.date: status for status in statuses}
 
     worked_seconds = sum(_record_seconds(record) for record in records)
-    remaining_seconds = max(required_seconds - worked_seconds, 0)
-    user_result.remaining_seconds = remaining_seconds
-    if remaining_seconds <= 0:
+    if worked_seconds >= required_seconds:
+        user_result.remaining_seconds = 0
         return user_result
+
+    # Objetivo semanal: por debajo del contrato, con un margen variable por
+    # empleado y semana para que ninguna semana quede clavada a las horas exactas.
+    target_seconds = _weekly_target_seconds(user, week_start, required_seconds)
 
     history_records = _user_history_records(user.id, week_start)
     user_templates = _templates_by_weekday(history_records, "histórico empleado")
@@ -216,19 +227,25 @@ def _autofill_user_week(
     for record in records:
         records_by_date.setdefault(record.date, []).append(record)
 
-    remaining_seconds = _top_up_partial_days(
+    # 1) Completa los días con fichaje parcial real hasta su jornada diaria
+    #    normal (presupuesto = lo que falta para el contrato).
+    created_topup = _top_up_partial_days(
         user,
         week_days,
         records_by_date,
         status_by_date,
-        remaining_seconds,
+        required_seconds - worked_seconds,
         user_day_patterns,
         group_day_patterns,
         modified_by,
         user_result,
     )
+    worked_seconds += created_topup
+
+    # 2) Rellena los días vacíos hasta el objetivo semanal (por debajo del contrato).
+    remaining_seconds = max(target_seconds - worked_seconds, 0)
     user_result.remaining_seconds = remaining_seconds
-    if remaining_seconds <= 0:
+    if remaining_seconds < MIN_FILL_SECONDS:
         return user_result
 
     record_dates = set(records_by_date)
@@ -266,7 +283,14 @@ def _autofill_user_week(
             group_templates,
             current_week_template,
         )
-        seconds_to_create = min(remaining_seconds, template.duration_seconds)
+        seconds_to_create = _fill_duration_seconds(
+            user,
+            day,
+            template.duration_seconds,
+            remaining_seconds,
+        )
+        if seconds_to_create < MIN_FILL_SECONDS:
+            break
         check_in, check_out = _build_shifted_record_times(
             user.id,
             day,
@@ -304,10 +328,10 @@ def _autofill_user_week(
         user_result.remaining_seconds = remaining_seconds
         user_result.pattern_source = template.source
 
-    if remaining_seconds > 0 and user_result.created_records == 0:
+    if user_result.created_records == 0 and remaining_seconds >= MIN_FILL_SECONDS:
         user_result.skipped_reason = "sin días disponibles para autofichar"
-    elif remaining_seconds > 0:
-        user_result.skipped_reason = "no se pudieron completar todas las horas"
+    elif remaining_seconds >= MIN_FILL_SECONDS:
+        user_result.skipped_reason = "semana incompleta: sin días disponibles suficientes"
 
     return user_result
 
@@ -376,6 +400,11 @@ def _build_group_history(
     records = query.all()
     source = "histórico categoría" if category else "histórico jornada"
     return _templates_by_weekday(records, source), _day_patterns_by_weekday(records)
+
+
+def _is_real_punch(record: TimeRecord) -> bool:
+    """A record that reflects a real clock-in (not one we generated)."""
+    return AUTO_FILL_RECORD_NOTE not in (record.notes or "")
 
 
 def _is_template_record(record: TimeRecord) -> bool:
@@ -488,7 +517,7 @@ def _top_up_partial_days(
     week_days: list[date],
     records_by_date: dict[date, list[TimeRecord]],
     status_by_date: dict[date, EmployeeStatus],
-    remaining_seconds: int,
+    budget_seconds: int,
     user_day_patterns: dict[int, DayPattern],
     group_day_patterns: dict[int, DayPattern],
     modified_by,
@@ -497,15 +526,23 @@ def _top_up_partial_days(
     """
     Complete days where the employee clocked part of the day (e.g. only the
     morning shift) by adding the missing shift up to the expected daily total.
+
+    Returns the total number of seconds created. Only days that contain at
+    least one real punch are eligible, so fully auto-generated days are never
+    re-completed (keeping the operation idempotent).
     """
+    remaining_budget = budget_seconds
+    created_total = 0
     for day in week_days:
-        if remaining_seconds <= 0:
+        if remaining_budget < MIN_FILL_SECONDS:
             break
 
         day_records = records_by_date.get(day)
         if not day_records:
             continue
         if any(record.check_in is None or record.check_out is None for record in day_records):
+            continue
+        if not any(_is_real_punch(record) for record in day_records):
             continue
         if not _is_employee_active_on_day(user, day):
             continue
@@ -522,15 +559,18 @@ def _top_up_partial_days(
         if deficit < MIN_TOP_UP_SECONDS:
             continue
 
-        seconds_to_create = min(deficit, remaining_seconds)
+        seconds_to_create = _round_to_minute(min(deficit, remaining_budget))
+        if seconds_to_create < MIN_FILL_SECONDS:
+            continue
+
         last_out = max(record.check_out for record in day_records)
         start = _top_up_start(user, day, last_out, user_day_patterns, group_day_patterns)
-        max_end = datetime.combine(day, dt_time(23, 59, 59))
+        max_end = datetime.combine(day, dt_time(23, 59, 0))
         if start >= max_end:
             continue
         end = min(start + timedelta(seconds=seconds_to_create), max_end)
         created_seconds = int((end - start).total_seconds())
-        if created_seconds <= 0:
+        if created_seconds < MIN_FILL_SECONDS:
             continue
 
         first_in = min(record.check_in for record in day_records)
@@ -558,13 +598,13 @@ def _top_up_partial_days(
                 notes=AUTO_FILL_RECORD_NOTE,
             ))
 
-        remaining_seconds -= created_seconds
+        remaining_budget -= created_seconds
+        created_total += created_seconds
         user_result.created_records += 1
         user_result.created_seconds += created_seconds
-        user_result.remaining_seconds = remaining_seconds
         user_result.pattern_source = "completado de día parcial"
 
-    return remaining_seconds
+    return created_total
 
 
 def _top_up_start(
@@ -583,9 +623,9 @@ def _top_up_start(
     if second_start is not None:
         start = datetime.combine(day, dt_time(0, 0)) + timedelta(seconds=second_start) + jitter
         if start >= minimum_start:
-            return start
+            return _floor_to_minute(start)
 
-    return last_out + timedelta(minutes=TOP_UP_BREAK_MINUTES) + jitter
+    return _floor_to_minute(last_out + timedelta(minutes=TOP_UP_BREAK_MINUTES) + jitter)
 
 
 def estimate_auto_close_time(record: TimeRecord) -> datetime | None:
@@ -834,8 +874,62 @@ def _median_int(values: list[int]) -> int:
     return int((ordered[index - 1] + ordered[index]) / 2)
 
 
+def _stable_signed_offset(user_id: int, day: date, seed: str, span: int) -> int:
+    if span <= 0:
+        return 0
+    return _stable_number(user_id, day.isoformat(), seed) % (span * 2 + 1) - span
+
+
 def _stable_minute_offset(user_id: int, day: date, seed: str = AUTO_FILL_SEED) -> int:
-    return _stable_number(user_id, day.isoformat(), seed) % (JITTER_MINUTES * 2 + 1) - JITTER_MINUTES
+    return _stable_signed_offset(user_id, day, seed, JITTER_MINUTES)
+
+
+def _round_to_minute(seconds: int) -> int:
+    return (int(seconds) // 60) * 60
+
+
+def _floor_to_minute(value: datetime) -> datetime:
+    return value.replace(second=0, microsecond=0)
+
+
+def _fill_duration_seconds(
+    user: User,
+    day: date,
+    base_seconds: int,
+    remaining_seconds: int,
+) -> int:
+    """
+    Duration for a generated full day: the template duration plus a stable
+    per-day jitter, rounded to whole minutes. When it would meet or exceed
+    the remaining budget, fall back to the remaining amount (floored to the
+    minute) so the last day shortens naturally instead of hitting an exact
+    second value.
+    """
+    remaining_floor = _round_to_minute(remaining_seconds)
+    if base_seconds >= remaining_seconds:
+        return remaining_floor
+
+    offset = 60 * _stable_signed_offset(user.id, day, DURATION_SEED, DURATION_JITTER_MINUTES)
+    jittered = _round_to_minute(max(base_seconds + offset, 60))
+    if jittered >= remaining_seconds:
+        return remaining_floor
+    return jittered
+
+
+def _weekly_target_seconds(user: User, week_start: date, required_seconds: int) -> int:
+    """
+    Target seconds for the week: the contract hours minus a variable margin so
+    no week lands exactly on the contracted hours. The margin depends on the
+    employee and the week, so it varies across both and shows no fixed pattern.
+    """
+    if required_seconds <= 0:
+        return 0
+    span = WEEKLY_SHORTFALL_MAX_BP - WEEKLY_SHORTFALL_MIN_BP
+    basis_points = WEEKLY_SHORTFALL_MIN_BP + (
+        _stable_number(user.id, week_start.isoformat(), SHORTFALL_SEED) % (span + 1)
+    )
+    shortfall = _round_to_minute(int(required_seconds * basis_points / 10000))
+    return max(required_seconds - shortfall, 0)
 
 
 def _stable_number(*parts) -> int:
