@@ -48,6 +48,7 @@ from tasks.autofill import (
 )
 
 REG_NOTE = "RG"                     # nota de los fichajes regularizados
+REG_REAL_IN_NOTE = "RGE"            # regularizado PERO con entrada real del empleado
 REG_SEED = "regularize"
 REG_TARGET_JITTER_BP = 500         # ±5% de variación natural del total semanal
 REG_DURATION_JITTER_MIN = 8        # ±8 min de variación por día
@@ -65,7 +66,22 @@ def _expected_daily_seconds(user: User) -> int:
 
 
 def _is_generated(record: TimeRecord) -> bool:
+    # REG_NOTE ("RG") también cubre REG_REAL_IN_NOTE ("RGE") por subcadena.
     return AUTO_FILL_RECORD_NOTE in (record.notes or "") or REG_NOTE in (record.notes or "")
+
+
+def _has_real_check_in(record: TimeRecord) -> bool:
+    """
+    Entrada fichada de verdad por el empleado: registro no generado, o generado
+    en una regularización previa que preservó la entrada real (RGE). Sin esto,
+    una segunda regularización trataría la entrada preservada como inventada y
+    la movería (bug de idempotencia detectado en la validación del 11/07).
+    """
+    if not record.check_in:
+        return False
+    if not _is_generated(record):
+        return True
+    return REG_REAL_IN_NOTE in (record.notes or "")
 
 
 def _is_autoclose(record: TimeRecord) -> bool:
@@ -323,8 +339,9 @@ def _regularize_user_week(
         if any(_is_solid(r) for r in day_recs):
             solid_days[day] = sum(_record_seconds(r) for r in day_recs if _is_solid(r))
         else:
-            # Día "blando": conserva la entrada real más temprana (si la hay)
-            real_ins = [r for r in day_recs if r.check_in and not _is_generated(r)]
+            # Día "blando": conserva la entrada real más temprana (si la hay),
+            # incluida la preservada en regularizaciones anteriores (RGE)
+            real_ins = [r for r in day_recs if _has_real_check_in(r)]
             keep_in = min(real_ins, key=lambda r: r.check_in) if real_ins else None
             soft_days[day] = keep_in
 
@@ -401,7 +418,8 @@ def _regularize_user_week(
 
         db.session.add(TimeRecord(
             user_id=user.id, check_in=check_in, check_out=check_out, date=day,
-            notes=REG_NOTE, modified_by=modified_by,
+            notes=REG_REAL_IN_NOTE if has_real_in else REG_NOTE,
+            modified_by=modified_by,
         ))
         ur.created_records += 1
         created_seconds += int((check_out - check_in).total_seconds())

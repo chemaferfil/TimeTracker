@@ -138,6 +138,42 @@ class RegularizeTestCase(unittest.TestCase):
         regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
         self.assertEqual(OvertimeAlert.query.count(), first)
 
+    def test_reruns_are_idempotent_and_keep_real_entries(self):
+        # Bug detectado en la validación del 11/07: la 2ª ejecución trataba los RG
+        # como totalmente generados y movía las entradas reales preservadas.
+        user = self._user("estable", 20)
+        for off in (0, 1, 2):
+            day = self.week_start + timedelta(days=off)
+            db.session.add(TimeRecord(
+                user_id=user.id, date=day,
+                check_in=datetime.combine(day, time(9, 0)),
+                check_out=datetime.combine(day, time(23, 59, 59)), notes="CA"))
+        db.session.commit()
+        rng = (self.week_start, self.week_start + timedelta(days=6))
+
+        def snapshot():
+            return sorted(
+                (r.date.isoformat(), r.check_in.isoformat(),
+                 r.check_out.isoformat(), r.notes)
+                for r in TimeRecord.query.filter_by(user_id=user.id).all()
+            )
+
+        regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
+        snap1 = snapshot()
+
+        # Las entradas reales de los días CA se conservan y quedan marcadas RGE
+        for off in (0, 1, 2):
+            day = self.week_start + timedelta(days=off)
+            rec = TimeRecord.query.filter_by(user_id=user.id, date=day).first()
+            self.assertEqual(rec.check_in.time(), time(9, 0))
+            self.assertIn("RGE", rec.notes)
+
+        # 2ª y 3ª ejecución: exactamente el mismo estado (fechas, horas y notas)
+        regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
+        self.assertEqual(snapshot(), snap1)
+        regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
+        self.assertEqual(snapshot(), snap1)
+
     def test_dry_run_does_not_persist(self):
         user = self._user("extra3", 15)
         self._rec(user, 0, 9, 8)
