@@ -274,6 +274,11 @@ def add_user():
             return render_template("user_form.html", user=None, action="add",
                                    form_data=request.form, centro_admin=get_admin_centro())
 
+        if not is_admin and weekly_hours <= 0:
+            flash("Un empleado debe tener horas semanales de contrato (mayor que 0).", "danger")
+            return render_template("user_form.html", user=None, action="add",
+                                   form_data=request.form, centro_admin=get_admin_centro())
+
         if User.query.filter((User.username == username) | (User.email == email)).first():
             flash("El nombre de usuario o el correo electrónico ya existen.", "danger")
             return render_template("user_form.html", user=None, action="add",
@@ -334,11 +339,20 @@ def edit_user(user_id):
             return render_template("user_form.html", user=user, action="edit",
                                    form_data=request.form, centro_admin=get_admin_centro())
 
+        new_weekly_hours = request.form.get("weekly_hours", type=int)
+        will_be_admin = user.is_admin
+        if user.id != session.get("user_id"):
+            will_be_admin = request.form.get("is_admin") == "on"
+        if not will_be_admin and (new_weekly_hours is None or new_weekly_hours <= 0):
+            flash("Un empleado debe tener horas semanales de contrato (mayor que 0).", "danger")
+            return render_template("user_form.html", user=user, action="edit",
+                                   form_data=request.form, centro_admin=get_admin_centro())
+
         # campos simples
         user.username      = new_username
         user.email         = new_email
         user.full_name     = request.form.get("full_name")
-        user.weekly_hours  = request.form.get("weekly_hours", type=int)
+        user.weekly_hours  = new_weekly_hours
         user.centro        = request.form.get("centro") or None
         user.categoria     = request.form.get("categoria") or None
         
@@ -652,8 +666,8 @@ def backfill_records():
         )
     elif dry_run:
         flash(
-            f"{prefix}{len(summary.weeks)} semana(s): se ajustarían "
-            f"{summary.created_records} registro(s) y se detectarían "
+            f"{prefix}{len(summary.weeks)} semana(s): se recrearían "
+            f"{summary.created_records} fichaje(s) y se detectarían "
             f"{summary.overtime_alerts} aviso(s) de horas extra. "
             "Pulsa «Aplicar backfill» para confirmarlo.",
             "info",
@@ -661,8 +675,8 @@ def backfill_records():
     else:
         flash(
             f"Regularización aplicada a {len(summary.weeks)} semana(s): "
-            f"{summary.created_records} registro(s) ajustado(s) y "
-            f"{summary.overtime_alerts} aviso(s) de horas extra detectado(s).",
+            f"{summary.created_records} fichaje(s) recreado(s) y "
+            f"{summary.overtime_alerts} aviso(s) detectado(s) (horas extra o descuadres).",
             "success",
         )
 

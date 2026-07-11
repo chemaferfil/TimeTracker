@@ -101,6 +101,43 @@ class RegularizeTestCase(unittest.TestCase):
         regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
         self.assertEqual(OvertimeAlert.query.count(), first)
 
+    def test_late_entry_without_exit_creates_shortfall_alert(self):
+        # 20h. Única actividad: entrada real a las 22:30 sin salida -> la salida
+        # se capa a las 23:59 y la semana queda muy por debajo del objetivo.
+        user = self._user("tardio", 20)
+        day = self.week_start + timedelta(days=3)
+        db.session.add(TimeRecord(
+            user_id=user.id, date=day,
+            check_in=datetime.combine(day, time(22, 30)), check_out=None))
+        db.session.commit()
+
+        regularize_range(self.week_start, self.week_start + timedelta(days=6),
+                         today=self.week_start + timedelta(days=14), dry_run=False)
+
+        # La entrada real tardía se conserva y la salida no pasa del mismo día
+        late = TimeRecord.query.filter_by(user_id=user.id, date=day).first()
+        self.assertEqual(late.check_in.time(), time(22, 30))
+        self.assertLessEqual(late.check_out, datetime.combine(day, time(23, 59, 59)))
+
+        # El día capado deja la semana ~3.5h corta -> aviso de descuadre
+        alerts = OvertimeAlert.query.filter_by(user_id=user.id).all()
+        shortfalls = [a for a in alerts if a.excess_seconds < 0]
+        self.assertEqual(len(shortfalls), 1)
+        self.assertEqual(shortfalls[0].week_start, self.week_start)
+
+    def test_shortfall_alert_is_idempotent(self):
+        user = self._user("tardio2", 20)
+        day = self.week_start + timedelta(days=3)
+        db.session.add(TimeRecord(
+            user_id=user.id, date=day,
+            check_in=datetime.combine(day, time(22, 30)), check_out=None))
+        db.session.commit()
+        rng = (self.week_start, self.week_start + timedelta(days=6))
+        regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
+        first = OvertimeAlert.query.count()
+        regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
+        self.assertEqual(OvertimeAlert.query.count(), first)
+
     def test_dry_run_does_not_persist(self):
         user = self._user("extra3", 15)
         self._rec(user, 0, 9, 8)

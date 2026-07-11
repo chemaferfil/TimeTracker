@@ -4,14 +4,12 @@ from flask import (
 )
 from sqlalchemy import desc, text, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time as dt_time
 import calendar
 import logging
 
 from models.models import TimeRecord, User, EmployeeStatus
 from models.database import db
-from tasks.scheduler import close_open_record
-
 time_bp = Blueprint("time", __name__)
 logger = logging.getLogger(__name__)
 
@@ -49,16 +47,9 @@ def check_in():
      # BUSCA REGISTRO ABIERTO
     existing_open = TimeRecord.query.filter_by(user_id=user_id, check_out=None).order_by(desc(TimeRecord.id)).first()
     if existing_open and existing_open.date < date.today():
-        closed_at = close_open_record(existing_open)
-        db.session.commit()
-        if closed_at is not None:
-            flash(
-                f"Se cerró automáticamente tu fichaje pendiente del "
-                f"{existing_open.date.strftime('%d-%m-%Y')} a las "
-                f"{existing_open.check_out.strftime('%H:%M')}.",
-                "info",
-            )
-            existing_open = None
+        # Fichaje de un día anterior sin salida: el empleado confirma/corrige
+        # entrada y salida antes de poder fichar hoy.
+        return redirect(url_for("time.close_pending"))
     if existing_open:
         # Permite al usuario cerrarlo desde aquí
         flash(f"Tienes un fichaje abierto desde {existing_open.check_in.strftime('%d-%m-%Y %H:%M:%S')}. Debes cerrarlo antes de fichar entrada.", "warning")
@@ -166,6 +157,11 @@ def check_out():
             .order_by(desc(TimeRecord.id))
             .first()
         )
+        if open_record and open_record.date < date.today():
+            # Cerrarlo con la hora de ahora crearía un turno de varios días:
+            # el empleado confirma/corrige entrada y salida de ese día.
+            db.session.rollback()
+            return redirect(url_for("time.close_pending"))
         if open_record:
             now = datetime.now()
             open_record.check_out = now
@@ -180,6 +176,85 @@ def check_out():
         flash("Error al registrar la salida. Intenta de nuevo.", "danger")
 
     return redirect(url_for("time.dashboard_employee"))
+
+
+# ------------------------------------------------------------------
+#  CERRAR FICHAJE PENDIENTE DE UN DÍA ANTERIOR
+# ------------------------------------------------------------------
+PENDING_CLOSE_NOTE = "CE"   # cierre confirmado por el empleado
+
+
+@time_bp.route("/close_pending", methods=["GET", "POST"])
+def close_pending():
+    if "user_id" not in session:
+        return redirect(url_for("auth.login"))
+    user_id = session["user_id"]
+
+    record = (
+        TimeRecord.query
+        .filter(
+            TimeRecord.user_id == user_id,
+            TimeRecord.check_in.isnot(None),
+            TimeRecord.check_out.is_(None),
+            TimeRecord.date < date.today(),
+        )
+        .order_by(TimeRecord.date.asc())
+        .first()
+    )
+    if record is None:
+        return redirect(url_for("time.dashboard_employee"))
+
+    if request.method == "POST":
+        entry_str = request.form.get("entry_time") or ""
+        exit_str = request.form.get("exit_time") or ""
+        try:
+            entry_t = datetime.strptime(entry_str, "%H:%M").time()
+            exit_t = datetime.strptime(exit_str, "%H:%M").time()
+        except ValueError:
+            flash("Introduce horas válidas (formato HH:MM).", "danger")
+            return redirect(url_for("time.close_pending"))
+
+        # La salida se limita al mismo día de la entrada
+        check_in_dt = datetime.combine(record.date, entry_t)
+        check_out_dt = datetime.combine(record.date, exit_t)
+        if check_out_dt <= check_in_dt:
+            flash("La salida debe ser posterior a la entrada, dentro del mismo día.", "danger")
+            return redirect(url_for("time.close_pending"))
+
+        try:
+            record.check_in = check_in_dt
+            record.check_out = check_out_dt
+            record.notes = (record.notes or "") + (" - " if record.notes else "") + PENDING_CLOSE_NOTE
+            db.session.commit()
+        except SQLAlchemyError:
+            db.session.rollback()
+            flash("Error al guardar el fichaje. Intenta de nuevo.", "danger")
+            return redirect(url_for("time.close_pending"))
+
+        flash(
+            f"Fichaje del {record.date.strftime('%d-%m-%Y')} cerrado "
+            f"({entry_t.strftime('%H:%M')} - {exit_t.strftime('%H:%M')}). "
+            "Ya puedes fichar tu entrada de hoy.",
+            "success",
+        )
+        return redirect(url_for("time.dashboard_employee"))
+
+    # GET: salida sugerida según el patrón habitual del empleado
+    from tasks.autofill import estimate_auto_close_time
+
+    try:
+        suggested_exit = estimate_auto_close_time(record)
+    except Exception:
+        suggested_exit = None
+    if suggested_exit is None:
+        fallback = record.check_in + timedelta(hours=4)
+        suggested_exit = min(fallback, datetime.combine(record.date, dt_time(23, 59)))
+
+    return render_template(
+        "close_pending.html",
+        record=record,
+        suggested_exit=suggested_exit,
+    )
 
 
 # ------------------------------------------------------------------

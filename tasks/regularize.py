@@ -54,6 +54,7 @@ REG_DURATION_JITTER_MIN = 8        # ±8 min de variación por día
 MIN_DAY_SECONDS = 30 * 60          # no crear días de menos de 30 min
 AUTO_CLOSE_NOTE = "CA"
 OVERTIME_MARGIN_SECONDS = 3600     # margen para marcar hora extra: > 1h sobre lo esperado
+SHORTFALL_MARGIN_SECONDS = 3600    # margen para marcar descuadre: > 1h por debajo del objetivo semanal
 
 
 def _expected_daily_seconds(user: User) -> int:
@@ -173,6 +174,51 @@ def _detect_overtime(user: User, week_start: date, solid_days: dict[date, int]) 
             ))
             new_alerts += 1
     return new_alerts
+
+
+def _record_shortfall_alert(user: User, week_start: date, worked: int, target: int) -> int:
+    """
+    Registra un aviso de DESCUADRE cuando la semana queda por debajo del objetivo
+    más allá del margen (p. ej. entrada muy tardía sin salida, cuya jornada se capó
+    a las 23:59). Reutiliza la tabla OvertimeAlert con excess_seconds NEGATIVO para
+    distinguirlo de una hora extra. Idempotente por (empleado, semana); conserva el
+    estado 'reviewed'. Devuelve 1 si el aviso es nuevo, 0 si no.
+    """
+    shortfall = target - worked
+    if shortfall <= SHORTFALL_MARGIN_SECONDS:
+        return 0
+
+    existing = OvertimeAlert.query.filter(
+        OvertimeAlert.user_id == user.id,
+        OvertimeAlert.week_start == week_start,
+        OvertimeAlert.excess_seconds < 0,
+    ).first()
+    if existing:
+        existing.worked_seconds = int(worked)
+        existing.expected_seconds = int(target)
+        existing.excess_seconds = int(worked - target)
+        return 0
+
+    # Slot libre en la semana que no choque con un aviso de horas extra (único por empleado+día)
+    slot = None
+    for i in range(WEEK_DAYS):
+        day = week_start + timedelta(days=i)
+        if not OvertimeAlert.query.filter_by(user_id=user.id, date=day).first():
+            slot = day
+            break
+    if slot is None:
+        return 0
+
+    db.session.add(OvertimeAlert(
+        user_id=user.id,
+        week_start=week_start,
+        date=slot,
+        worked_seconds=int(worked),
+        expected_seconds=int(target),
+        excess_seconds=int(worked - target),
+        reviewed=False,
+    ))
+    return 1
 
 
 def regularize_range(
@@ -326,6 +372,7 @@ def _regularize_user_week(
     templates = _templates_by_weekday(_user_history_records(user.id, week_start), "histórico empleado")
     group_templates, _ = _get_group_history(user, week_start, pattern_cache)
 
+    created_seconds = 0
     for day in target_days:
         weekday = day.weekday()
         dur = base + 60 * _stable_signed_offset(user.id, day, REG_SEED + ":dur", REG_DURATION_JITTER_MIN)
@@ -333,7 +380,8 @@ def _regularize_user_week(
 
         # Entrada: la real si la hay (día blando con entrada), si no una plausible del patrón
         keep_in = soft_days.get(day)
-        if keep_in and keep_in.check_in:
+        has_real_in = bool(keep_in and keep_in.check_in)
+        if has_real_in:
             check_in = keep_in.check_in
         else:
             start_seconds = _start_seconds_for(user, weekday, templates, group_templates)
@@ -344,7 +392,10 @@ def _regularize_user_week(
         max_end = datetime.combine(day, dt_time(23, 59, 59))
         if check_out > max_end:
             check_out = max_end
-            check_in = max(check_out - timedelta(seconds=dur), datetime.combine(day, dt_time(0, 0)))
+            # Una entrada REAL no se mueve: el día queda corto y se avisará del
+            # descuadre. Solo las entradas generadas se adelantan para cuadrar.
+            if not has_real_in:
+                check_in = max(check_out - timedelta(seconds=dur), datetime.combine(day, dt_time(0, 0)))
         if check_out <= check_in:
             continue
 
@@ -353,6 +404,7 @@ def _regularize_user_week(
             notes=REG_NOTE, modified_by=modified_by,
         ))
         ur.created_records += 1
+        created_seconds += int((check_out - check_in).total_seconds())
 
         st = status_by_date.get(day)
         if st:
@@ -366,6 +418,12 @@ def _regularize_user_week(
             )
             db.session.add(new_st)
             status_by_date[day] = new_st
+
+    # Descuadre: la semana queda claramente por debajo del objetivo (p. ej. una
+    # entrada muy tardía sin salida capada a las 23:59) → aviso para el admin.
+    ur.overtime_alerts += _record_shortfall_alert(
+        user, week_start, solid_seconds + created_seconds, target_seconds
+    )
 
     return ur
 

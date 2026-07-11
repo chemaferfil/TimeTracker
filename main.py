@@ -164,14 +164,18 @@ def inject_overtime_alerts():
     items = []
     for a in alerts:
         emp = a.user
+        # excess_seconds negativo = descuadre (semana por debajo del objetivo);
+        # positivo = posible hora extra en un día concreto.
         items.append({
+            "kind": "shortfall" if a.excess_seconds < 0 else "overtime",
             "full_name": emp.full_name if emp else f"ID {a.user_id}",
             "username": emp.username if emp else "-",
             "weekday": dias[a.date.weekday()],
             "date": a.date.strftime("%d/%m/%Y"),
+            "week_start": a.week_start.strftime("%d/%m/%Y"),
             "worked_h": round(a.worked_seconds / 3600, 1),
             "expected_h": round(a.expected_seconds / 3600, 1),
-            "excess_h": round(a.excess_seconds / 3600, 1),
+            "excess_h": round(abs(a.excess_seconds) / 3600, 1),
         })
     return dict(overtime_alerts=items, overtime_alerts_count=len(items))
 
