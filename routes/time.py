@@ -49,15 +49,16 @@ def check_in():
      # BUSCA REGISTRO ABIERTO
     existing_open = TimeRecord.query.filter_by(user_id=user_id, check_out=None).order_by(desc(TimeRecord.id)).first()
     if existing_open and existing_open.date < date.today():
-        close_open_record(existing_open)
+        closed_at = close_open_record(existing_open)
         db.session.commit()
-        flash(
-            f"Se cerró automáticamente tu fichaje pendiente del "
-            f"{existing_open.date.strftime('%d-%m-%Y')} a las "
-            f"{existing_open.check_out.strftime('%H:%M')}.",
-            "info",
-        )
-        existing_open = None
+        if closed_at is not None:
+            flash(
+                f"Se cerró automáticamente tu fichaje pendiente del "
+                f"{existing_open.date.strftime('%d-%m-%Y')} a las "
+                f"{existing_open.check_out.strftime('%H:%M')}.",
+                "info",
+            )
+            existing_open = None
     if existing_open:
         # Permite al usuario cerrarlo desde aquí
         flash(f"Tienes un fichaje abierto desde {existing_open.check_in.strftime('%d-%m-%Y %H:%M:%S')}. Debes cerrarlo antes de fichar entrada.", "warning")
