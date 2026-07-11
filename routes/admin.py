@@ -4,7 +4,7 @@ from flask import (
 )
 from functools import wraps
 from datetime import datetime, date, timedelta
-from models.models import User, TimeRecord, EmployeeStatus
+from models.models import User, TimeRecord, EmployeeStatus, OvertimeAlert
 from models.database import db
 
 admin_bp = Blueprint(
@@ -669,6 +669,18 @@ def backfill_records():
         )
 
     return redirect(url_for("admin.manage_records", page=page))
+
+
+@admin_bp.route("/overtime/dismiss", methods=["POST"])
+@admin_required
+def dismiss_overtime_alerts():
+    """Marca como revisados los avisos de horas extra (cierra el pop-up del admin)."""
+    pending = OvertimeAlert.query.filter(OvertimeAlert.reviewed.is_(False)).all()
+    for alert in pending:
+        alert.reviewed = True
+        alert.reviewed_at = datetime.utcnow()
+    db.session.commit()
+    return redirect(request.form.get("next") or url_for("admin.dashboard"))
 
 
 @admin_bp.route("/records/edit/<int:record_id>", methods=["GET", "POST"])

@@ -109,3 +109,38 @@ class EmployeeStatus(db.Model):
             f"<EmployeeStatus {self.id}-U{self.user_id} "
             f"{self.date} {self.status}>"
         )
+
+
+class OvertimeAlert(db.Model):
+    """
+    Aviso de posible hora extra detectada al cierre semanal: un empleado con
+    fichaje real completo cuyo día superó la jornada diaria esperada (según su
+    contrato) por encima del margen configurado. Se muestra al administrador.
+    """
+    __tablename__ = "overtime_alert"
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "date", name="uix_overtime_user_date"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    week_start = db.Column(db.Date, nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    worked_seconds = db.Column(db.Integer, nullable=False)
+    expected_seconds = db.Column(db.Integer, nullable=False)
+    excess_seconds = db.Column(db.Integer, nullable=False)
+    reviewed = db.Column(db.Boolean, nullable=False, default=False)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("User", backref="overtime_alerts")
+
+    def __repr__(self):
+        return (
+            f"<OvertimeAlert U{self.user_id} {self.date} "
+            f"+{self.excess_seconds // 3600}h reviewed={self.reviewed}>"
+        )

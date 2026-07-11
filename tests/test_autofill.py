@@ -179,7 +179,9 @@ class AutoFillWeekTestCase(unittest.TestCase):
         self.assertGreaterEqual(open_record.check_out, datetime.combine(self.week_start, time(16, 58)))
         self.assertLessEqual(open_record.check_out, datetime.combine(self.week_start, time(17, 8)))
 
-    def test_auto_close_falls_back_without_pattern(self):
+    def test_auto_close_leaves_record_open_without_pattern(self):
+        # Ya NO se cierra a las 23:59: sin base para estimar (jornada 0 y sin
+        # histórico) el registro se deja ABIERTO para la regularización semanal.
         user = self._user("sinPatron0", weekly_hours=0)
         open_record = TimeRecord(
             user_id=user.id,
@@ -189,13 +191,11 @@ class AutoFillWeekTestCase(unittest.TestCase):
         db.session.add(open_record)
         db.session.commit()
 
-        close_open_record(open_record)
+        result = close_open_record(open_record)
         db.session.commit()
 
-        self.assertEqual(
-            open_record.check_out,
-            datetime.combine(self.week_start, time(23, 59, 59)),
-        )
+        self.assertIsNone(result)
+        self.assertIsNone(open_record.check_out)
 
     def test_legacy_auto_closed_records_do_not_pollute_estimate(self):
         user = self._user("historialCA", weekly_hours=40)

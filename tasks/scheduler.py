@@ -42,18 +42,22 @@ def _today_in_app_timezone():
 def close_open_record(record: TimeRecord):
     """
     Close an open record at a plausible check-out based on the employee's
-    typical shift duration. Falls back to 23:59:59 of the record date when
-    no estimate is possible (e.g. employee without weekly hours or history).
+    typical shift duration (own history, group history or contracted hours).
+
+    Ya NO se usa el cierre a las 23:59:59: generaba jornadas ficticias enormes
+    (entrada sin salida) que descuadraban las semanas. Si no se puede estimar
+    una salida plausible (p. ej. empleado sin jornada contratada), el registro
+    se deja ABIERTO y lo resolverá la regularización semanal del lunes.
     """
     from tasks.autofill import estimate_auto_close_time
 
-    auto_close_time = None
     try:
         auto_close_time = estimate_auto_close_time(record)
     except Exception:
         auto_close_time = None
     if auto_close_time is None:
-        auto_close_time = datetime.combine(record.date, dt_time(23, 59, 59))
+        # Sin base para estimar: no inventamos una salida (nada de 23:59).
+        return None
 
     record.check_out = auto_close_time
     record.notes = (record.notes or "") + (" - " if record.notes else "") + AUTO_CLOSE_NOTE
@@ -92,15 +96,20 @@ def auto_close_open_records(include_today: bool = True, app=None):
             if open_records:
                 app.logger.info(f"Auto-closing {len(open_records)} open time records")
 
+                closed = 0
                 for record in open_records:
                     auto_close_time = close_open_record(record)
+                    if auto_close_time is None:
+                        # No se pudo estimar: se deja abierto para la regularización.
+                        continue
+                    closed += 1
                     app.logger.info(
                         f"Closed record {record.id} for user {record.user_id} at {auto_close_time}"
                     )
 
                 db.session.commit()
-                app.logger.info(f"Successfully auto-closed {len(open_records)} records")
-                return len(open_records)
+                app.logger.info(f"Successfully auto-closed {closed} of {len(open_records)} records")
+                return closed
             else:
                 app.logger.info("No open records to auto-close")
                 return 0
