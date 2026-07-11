@@ -629,24 +629,22 @@ def backfill_records():
     centro = get_admin_centro()
 
     try:
-        from tasks.backfill_range import backfill_range
+        from tasks.regularize import regularize_range
 
-        summary = backfill_range(
+        summary = regularize_range(
             range_start,
             range_end,
             today=today,
             dry_run=dry_run,
             centro=centro,
             modified_by=session.get("user_id"),
-            verbose=False,
         )
     except Exception as e:
-        flash(f"Error al ejecutar el backfill: {str(e)}", "danger")
+        flash(f"Error al ejecutar la regularización: {str(e)}", "danger")
         return redirect(url_for("admin.manage_records", page=page))
 
     prefix = "SIMULACIÓN — " if dry_run else ""
-    hours = summary["created_seconds"] / 3600
-    if not summary["weeks"]:
+    if not summary.weeks:
         flash(
             f"{prefix}No hay semanas completas en el rango "
             f"{range_start} … {range_end}.",
@@ -654,17 +652,17 @@ def backfill_records():
         )
     elif dry_run:
         flash(
-            f"{prefix}{len(summary['weeks'])} semana(s): se cerrarían "
-            f"{summary['closed']} fichaje(s) abierto(s) y se crearían "
-            f"{summary['created_records']} registro(s) ({hours:.1f}h). "
+            f"{prefix}{len(summary.weeks)} semana(s): se ajustarían "
+            f"{summary.created_records} registro(s) y se detectarían "
+            f"{summary.overtime_alerts} aviso(s) de horas extra. "
             "Pulsa «Aplicar backfill» para confirmarlo.",
             "info",
         )
     else:
         flash(
-            f"Backfill aplicado a {len(summary['weeks'])} semana(s): "
-            f"{summary['closed']} fichaje(s) cerrado(s) y "
-            f"{summary['created_records']} registro(s) creado(s) ({hours:.1f}h).",
+            f"Regularización aplicada a {len(summary.weeks)} semana(s): "
+            f"{summary.created_records} registro(s) ajustado(s) y "
+            f"{summary.overtime_alerts} aviso(s) de horas extra detectado(s).",
             "success",
         )
 
