@@ -138,47 +138,6 @@ def inject_user():
         greeting=greeting,
     )
 
-# Usuario administrador que recibe el aviso de horas extra
-OVERTIME_ADMIN_USERNAME = "Valle"
-
-# Context processor: avisos de horas extra pendientes (solo para el admin Valle)
-@app.context_processor
-def inject_overtime_alerts():
-    from flask import session
-    from models.models import User, OvertimeAlert
-
-    user_id = session.get("user_id")
-    if not user_id:
-        return dict(overtime_alerts=[], overtime_alerts_count=0)
-    user = User.query.get(user_id)
-    if not (user and user.is_admin and user.username == OVERTIME_ADMIN_USERNAME):
-        return dict(overtime_alerts=[], overtime_alerts_count=0)
-
-    dias = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
-    alerts = (
-        OvertimeAlert.query
-        .filter(OvertimeAlert.reviewed.is_(False))
-        .order_by(OvertimeAlert.excess_seconds.desc())
-        .all()
-    )
-    items = []
-    for a in alerts:
-        emp = a.user
-        # excess_seconds negativo = descuadre (semana por debajo del objetivo);
-        # positivo = posible hora extra en un día concreto.
-        items.append({
-            "kind": "shortfall" if a.excess_seconds < 0 else "overtime",
-            "full_name": emp.full_name if emp else f"ID {a.user_id}",
-            "username": emp.username if emp else "-",
-            "weekday": dias[a.date.weekday()],
-            "date": a.date.strftime("%d/%m/%Y"),
-            "week_start": a.week_start.strftime("%d/%m/%Y"),
-            "worked_h": round(a.worked_seconds / 3600, 1),
-            "expected_h": round(a.expected_seconds / 3600, 1),
-            "excess_h": round(abs(a.excess_seconds) / 3600, 1),
-        })
-    return dict(overtime_alerts=items, overtime_alerts_count=len(items))
-
 # Registrar blueprints
 app.register_blueprint(auth_bp)
 app.register_blueprint(time_bp)
