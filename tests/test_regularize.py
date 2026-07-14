@@ -46,17 +46,28 @@ class RegularizeTestCase(unittest.TestCase):
         db.session.commit()
         return r
 
-    def _week_hours(self, user):
-        rr = TimeRecord.query.filter(
+    def _run(self):
+        regularize_range(self.week_start, self.week_start + timedelta(days=6),
+                         today=self.week_start + timedelta(days=14), dry_run=False)
+
+    def _records(self, user):
+        return TimeRecord.query.filter(
             TimeRecord.user_id == user.id,
             TimeRecord.date >= self.week_start,
             TimeRecord.date <= self.week_start + timedelta(days=6),
             TimeRecord.check_out.isnot(None),
         ).all()
-        return sum((r.check_out - r.check_in).total_seconds() for r in rr) / 3600
+
+    def _day_hours(self, user):
+        return [(r.check_out - r.check_in).total_seconds() / 3600 for r in self._records(user)]
+
+    def _week_hours(self, user):
+        return sum(self._day_hours(user))
+
+    # --- Cuadre semanal ---------------------------------------------------
 
     def test_ca_week_is_reduced_to_contract(self):
-        # 20h con 3 días cerrados a 23:59 (CA) de ~14h cada uno -> semana inflada
+        # 20h con 3 días cerrados a 23:59 (CA) de ~14h -> semana inflada.
         user = self._user("inflado", 20)
         for off in (0, 1, 2):
             day = self.week_start + timedelta(days=off)
@@ -67,129 +78,75 @@ class RegularizeTestCase(unittest.TestCase):
         db.session.commit()
         self.assertGreater(self._week_hours(user), 35)
 
-        regularize_range(self.week_start, self.week_start + timedelta(days=6),
-                         today=self.week_start + timedelta(days=14), dry_run=False)
+        self._run()
+        # Cuadra ~20h y ningún día pasa de 5h.
+        self.assertGreaterEqual(self._week_hours(user), 18.5)
+        self.assertLessEqual(self._week_hours(user), 21.5)
+        self.assertLessEqual(max(self._day_hours(user)), 5.0 + 1e-6)
 
-        # tras regularizar, la semana queda cerca del contrato (natural ±)
-        self.assertGreaterEqual(self._week_hours(user), 17)
-        self.assertLessEqual(self._week_hours(user), 23)
+    # --- Tope aplicado también a días REALES ------------------------------
 
-    def test_real_complete_day_is_kept_and_overtime_flagged(self):
-        # 15h (esperado 5h/día). Un día REAL de 8h -> horas extra + se conserva.
-        user = self._user("extra", 15)
-        real = self._rec(user, day_offset=0, start_h=9, hours=8)  # lunes real 8h
+    def test_real_day_over_cap_is_trimmed_no_overtime(self):
+        # 15h (tope 5h/día). Un día REAL de 8h -> se recorta a <=5h y NO se
+        # genera ninguna hora extra (el cliente las gestiona en otra app).
+        user = self._user("real8", 15)
+        self._rec(user, day_offset=0, start_h=9, hours=8)  # lunes real 8h
 
-        regularize_range(self.week_start, self.week_start + timedelta(days=6),
-                         today=self.week_start + timedelta(days=14), dry_run=False)
+        self._run()
 
-        kept = db.session.get(TimeRecord, real.id)
-        self.assertIsNotNone(kept)  # el día real no se borra
-        self.assertEqual((kept.check_out - kept.check_in).total_seconds() / 3600, 8)
+        self.assertLessEqual(max(self._day_hours(user)), 5.0 + 1e-6)   # recortado al tope
+        self.assertEqual(OvertimeAlert.query.count(), 0)               # sin horas extra
+        self.assertGreaterEqual(self._week_hours(user), 14.0)          # cuadra ~15h
+        self.assertLessEqual(self._week_hours(user), 16.0)
 
-        alert = OvertimeAlert.query.filter_by(user_id=user.id).first()
-        self.assertIsNotNone(alert)
-        self.assertEqual(alert.date, self.week_start)
-        # 8h trabajadas vs 5h esperadas -> +3h de exceso
-        self.assertAlmostEqual(alert.excess_seconds / 3600, 3.0, delta=0.05)
+    def test_real_entry_time_is_preserved_when_trimmed(self):
+        # La ENTRADA real se conserva aunque se recorte la salida al tope.
+        user = self._user("entrada", 15)
+        self._rec(user, day_offset=0, start_h=8, hours=9)  # entra a las 8:00
 
-    def test_overtime_alert_is_idempotent(self):
-        user = self._user("extra2", 15)
-        self._rec(user, 0, 9, 8)
-        rng = (self.week_start, self.week_start + timedelta(days=6))
-        regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
-        first = OvertimeAlert.query.count()
-        regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
-        self.assertEqual(OvertimeAlert.query.count(), first)
+        self._run()
 
-    def test_late_entry_without_exit_creates_shortfall_alert(self):
-        # 20h. Única actividad: entrada real a las 22:30 sin salida -> la salida
-        # se capa a las 23:59 y la semana queda muy por debajo del objetivo.
-        user = self._user("tardio", 20)
+        lunes = TimeRecord.query.filter_by(
+            user_id=user.id, date=self.week_start).first()
+        self.assertEqual(lunes.check_in.time(), time(8, 0))            # entrada intacta
+        self.assertLessEqual(
+            (lunes.check_out - lunes.check_in).total_seconds() / 3600, 5.0 + 1e-6)
+        self.assertIn("RGE", lunes.notes)                             # marcado entrada real
+
+    # --- Nunca se generan alertas -----------------------------------------
+
+    def test_no_alerts_are_ever_created(self):
+        # Ni horas extra (día real largo) ni descuadre (entrada tardía sin salida).
+        user = self._user("sinavisos", 20)
+        self._rec(user, 0, 9, 12)  # día real enorme
         day = self.week_start + timedelta(days=3)
-        db.session.add(TimeRecord(
+        db.session.add(TimeRecord(  # entrada tardía sin salida
             user_id=user.id, date=day,
             check_in=datetime.combine(day, time(22, 30)), check_out=None))
         db.session.commit()
 
-        regularize_range(self.week_start, self.week_start + timedelta(days=6),
-                         today=self.week_start + timedelta(days=14), dry_run=False)
+        self._run()
+        self.assertEqual(OvertimeAlert.query.count(), 0)
 
-        # La entrada real tardía se conserva y la salida no pasa del mismo día
-        late = TimeRecord.query.filter_by(user_id=user.id, date=day).first()
-        self.assertEqual(late.check_in.time(), time(22, 30))
-        self.assertLessEqual(late.check_out, datetime.combine(day, time(23, 59, 59)))
-
-        # El día capado deja la semana ~3.5h corta -> aviso de descuadre
-        alerts = OvertimeAlert.query.filter_by(user_id=user.id).all()
-        shortfalls = [a for a in alerts if a.excess_seconds < 0]
-        self.assertEqual(len(shortfalls), 1)
-        self.assertEqual(shortfalls[0].week_start, self.week_start)
-
-    def test_shortfall_alert_is_idempotent(self):
-        user = self._user("tardio2", 20)
-        day = self.week_start + timedelta(days=3)
-        db.session.add(TimeRecord(
-            user_id=user.id, date=day,
-            check_in=datetime.combine(day, time(22, 30)), check_out=None))
+    def test_existing_alerts_are_cleared(self):
+        # Alertas antiguas (lógica previa) se borran al regularizar la semana.
+        user = self._user("limpia", 20)
+        db.session.add(OvertimeAlert(
+            user_id=user.id, week_start=self.week_start,
+            date=self.week_start + timedelta(days=1),
+            worked_seconds=36000, expected_seconds=18000,
+            excess_seconds=18000, reviewed=False))
+        self._rec(user, 0, 9, 4)
         db.session.commit()
-        rng = (self.week_start, self.week_start + timedelta(days=6))
-        regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
-        first = OvertimeAlert.query.count()
-        regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
-        self.assertEqual(OvertimeAlert.query.count(), first)
+        self.assertEqual(OvertimeAlert.query.count(), 1)
 
-    def test_reruns_are_idempotent_and_keep_real_entries(self):
-        # Bug detectado en la validación del 11/07: la 2ª ejecución trataba los RG
-        # como totalmente generados y movía las entradas reales preservadas.
-        user = self._user("estable", 20)
-        for off in (0, 1, 2):
-            day = self.week_start + timedelta(days=off)
-            db.session.add(TimeRecord(
-                user_id=user.id, date=day,
-                check_in=datetime.combine(day, time(9, 0)),
-                check_out=datetime.combine(day, time(23, 59, 59)), notes="CA"))
-        db.session.commit()
-        rng = (self.week_start, self.week_start + timedelta(days=6))
+        self._run()
+        self.assertEqual(OvertimeAlert.query.count(), 0)
 
-        def snapshot():
-            return sorted(
-                (r.date.isoformat(), r.check_in.isoformat(),
-                 r.check_out.isoformat(), r.notes)
-                for r in TimeRecord.query.filter_by(user_id=user.id).all()
-            )
-
-        regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
-        snap1 = snapshot()
-
-        # Las entradas reales de los días CA se conservan y quedan marcadas RGE
-        for off in (0, 1, 2):
-            day = self.week_start + timedelta(days=off)
-            rec = TimeRecord.query.filter_by(user_id=user.id, date=day).first()
-            self.assertEqual(rec.check_in.time(), time(9, 0))
-            self.assertIn("RGE", rec.notes)
-
-        # 2ª y 3ª ejecución: exactamente el mismo estado (fechas, horas y notas)
-        regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
-        self.assertEqual(snapshot(), snap1)
-        regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
-        self.assertEqual(snapshot(), snap1)
-
-    def _generated_day_hours(self, user):
-        """Horas de cada fichaje GENERADO (RG/RGE) de la semana."""
-        rr = TimeRecord.query.filter(
-            TimeRecord.user_id == user.id,
-            TimeRecord.date >= self.week_start,
-            TimeRecord.date <= self.week_start + timedelta(days=6),
-            TimeRecord.check_out.isnot(None),
-        ).all()
-        return [
-            (r.check_out - r.check_in).total_seconds() / 3600
-            for r in rr if "RG" in (r.notes or "")
-        ]
+    # --- Tope por contrato en días generados ------------------------------
 
     def test_generated_days_never_exceed_cap_10h(self):
-        # 10h/sem, tope 3h/día. Días inflados (CA ~14h) -> al regularizar, ningún
-        # día generado supera 3h y hacen falta >=4 días para cuadrar las 10h.
+        # 10h/sem, tope 3h/día -> ningún día >3h y repartido en >=4 días.
         user = self._user("cap10", 10)
         for off in (0, 1, 2):
             day = self.week_start + timedelta(days=off)
@@ -198,19 +155,16 @@ class RegularizeTestCase(unittest.TestCase):
                 check_out=datetime.combine(day, time(23, 59, 59)), notes="CA"))
         db.session.commit()
 
-        regularize_range(self.week_start, self.week_start + timedelta(days=6),
-                         today=self.week_start + timedelta(days=14), dry_run=False)
-
-        gen = self._generated_day_hours(user)
-        self.assertTrue(gen)
-        self.assertLessEqual(max(gen), 3.0 + 1e-6)      # tope 3h respetado
-        self.assertGreaterEqual(len(gen), 4)            # repartido en >=4 días
-        self.assertGreaterEqual(self._week_hours(user), 8)
-        self.assertLessEqual(self._week_hours(user), 11)
+        self._run()
+        h = self._day_hours(user)
+        self.assertTrue(h)
+        self.assertLessEqual(max(h), 3.0 + 1e-6)
+        self.assertGreaterEqual(len(h), 4)
+        self.assertGreaterEqual(self._week_hours(user), 9.0)
+        self.assertLessEqual(self._week_hours(user), 11.0)
 
     def test_generated_days_never_exceed_cap_40h(self):
-        # 40h/sem, tope 8h/día. 3 días inflados -> generados <=8h, semana <=40h
-        # (sin horas extra) y sin quedar corta de forma escandalosa.
+        # 40h/sem, tope 8h/día -> generados <=8h y semana <=40h (sin extra).
         user = self._user("cap40", 40)
         for off in (0, 1, 2):
             day = self.week_start + timedelta(days=off)
@@ -219,20 +173,55 @@ class RegularizeTestCase(unittest.TestCase):
                 check_out=datetime.combine(day, time(23, 59, 59)), notes="CA"))
         db.session.commit()
 
-        regularize_range(self.week_start, self.week_start + timedelta(days=6),
-                         today=self.week_start + timedelta(days=14), dry_run=False)
+        self._run()
+        h = self._day_hours(user)
+        self.assertTrue(h)
+        self.assertLessEqual(max(h), 8.0 + 1e-6)
+        self.assertLessEqual(self._week_hours(user), 40.01)
+        self.assertGreaterEqual(self._week_hours(user), 37.0)
 
-        gen = self._generated_day_hours(user)
-        self.assertTrue(gen)
-        self.assertLessEqual(max(gen), 8.0 + 1e-6)      # tope 8h respetado
-        self.assertLessEqual(self._week_hours(user), 40.01)  # nunca por encima de 40h
+    # --- Idempotencia ------------------------------------------------------
+
+    def test_reruns_are_idempotent_and_keep_real_entries(self):
+        user = self._user("estable", 20)
+        for off in (0, 1, 2):
+            day = self.week_start + timedelta(days=off)
+            db.session.add(TimeRecord(
+                user_id=user.id, date=day,
+                check_in=datetime.combine(day, time(9, 0)),
+                check_out=datetime.combine(day, time(23, 59, 59)), notes="CA"))
+        db.session.commit()
+
+        def snapshot():
+            return sorted(
+                (r.date.isoformat(), r.check_in.isoformat(),
+                 r.check_out.isoformat(), r.notes)
+                for r in TimeRecord.query.filter_by(user_id=user.id).all()
+            )
+
+        self._run()
+        snap1 = snapshot()
+        # Entradas reales conservadas y marcadas RGE.
+        for off in (0, 1, 2):
+            day = self.week_start + timedelta(days=off)
+            rec = TimeRecord.query.filter_by(user_id=user.id, date=day).first()
+            self.assertEqual(rec.check_in.time(), time(9, 0))
+            self.assertIn("RGE", rec.notes)
+
+        self._run()
+        self.assertEqual(snapshot(), snap1)
+        self._run()
+        self.assertEqual(snapshot(), snap1)
 
     def test_dry_run_does_not_persist(self):
-        user = self._user("extra3", 15)
+        user = self._user("seco", 15)
         self._rec(user, 0, 9, 8)
         regularize_range(self.week_start, self.week_start + timedelta(days=6),
                          today=self.week_start + timedelta(days=14), dry_run=True)
-        self.assertEqual(OvertimeAlert.query.count(), 0)
+        # Sin persistir: el día real de 8h sigue intacto y no se recortó.
+        recs = self._records(user)
+        self.assertEqual(len(recs), 1)
+        self.assertEqual((recs[0].check_out - recs[0].check_in).total_seconds() / 3600, 8)
 
 
 if __name__ == "__main__":

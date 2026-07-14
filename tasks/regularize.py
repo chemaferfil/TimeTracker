@@ -32,13 +32,11 @@ from models.models import EmployeeStatus, OvertimeAlert, TimeRecord, User
 from tasks.autofill import (
     AUTO_FILL_RECORD_NOTE,
     BLOCKING_STATUSES,
-    LEGACY_AUTO_CLOSE_TIME,
     WEEK_DAYS,
     _generated_start_seconds,
     _get_group_history,
     _has_two_consecutive_days_off,
     _is_employee_active_on_day,
-    _record_seconds,
     _stable_minute_offset,
     _stable_signed_offset,
     _target_workday_count,
@@ -50,29 +48,19 @@ from tasks.autofill import (
 REG_NOTE = "RG"                     # nota de los fichajes regularizados
 REG_REAL_IN_NOTE = "RGE"            # regularizado PERO con entrada real del empleado
 REG_SEED = "regularize"
-REG_TARGET_JITTER_BP = 500         # ±5% de variación natural del total semanal
+REG_TARGET_JITTER_MIN = 12         # ±12 min de variación del total semanal (mínima, no %)
 REG_DURATION_JITTER_MIN = 8        # ±8 min de variación por día
 MIN_DAY_SECONDS = 30 * 60          # no crear días de menos de 30 min
 MAX_REG_WORKDAYS = 5               # tope de días laborables generados (2 libres seguidos)
-AUTO_CLOSE_NOTE = "CA"
-OVERTIME_MARGIN_SECONDS = 3600     # margen para marcar hora extra: > 1h sobre lo esperado
-SHORTFALL_MARGIN_SECONDS = 3600    # margen para marcar descuadre: > 1h por debajo del objetivo semanal
-
-
-def _expected_daily_seconds(user: User) -> int:
-    wh = user.weekly_hours or 0
-    if wh <= 0:
-        return 0
-    return int((wh * 3600) / max(_target_workday_count(wh), 1))
 
 
 def _max_daily_seconds(user: User) -> int:
     """
-    Tope diario de los fichajes GENERADOS por la regularización (RG/RGE). Tabla
-    acordada con el cliente (jul-2026): ningún día generado supera este máximo,
-    aunque implique repartir la semana en más días. NO afecta a los fichajes
-    REALES completos (se conservan; su exceso ya se avisa como hora extra).
-    Diseño: tope × MAX_REG_WORKDAYS ≥ jornada semanal, así el contrato cabe.
+    Tope diario de horas por contrato. Tabla acordada con el cliente (jul-2026):
+    NINGÚN día (real o generado) puede superar este máximo. Si un fichaje real
+    excede el tope, la regularización lo recorta; no se muestran horas extra
+    (se gestionan en otra aplicación).
+    Diseño: tope × MAX_REG_WORKDAYS ≥ jornada semanal, así el contrato cuadra.
 
         ≤5h→2h · 7-10h→3h · 12h→4h · 15-20h→5h · 25h→6h · 30h→7h · ≥40h→8h
     """
@@ -113,21 +101,6 @@ def _has_real_check_in(record: TimeRecord) -> bool:
     if not _is_generated(record):
         return True
     return REG_REAL_IN_NOTE in (record.notes or "")
-
-
-def _is_autoclose(record: TimeRecord) -> bool:
-    if AUTO_CLOSE_NOTE in (record.notes or ""):
-        return True
-    return bool(record.check_out and record.check_out.time() == LEGACY_AUTO_CLOSE_TIME)
-
-
-def _is_solid(record: TimeRecord) -> bool:
-    """Fichaje real y completo: entrada y salida de verdad (ni auto-cierre ni generado)."""
-    if not record.check_in or not record.check_out:
-        return False
-    if _is_generated(record) or _is_autoclose(record):
-        return False
-    return True
 
 
 @dataclass
@@ -179,93 +152,76 @@ def _week_starts(range_start: date, range_end: date, today: date) -> list[date]:
 
 
 def _weekly_target_seconds(user: User, week_start: date) -> int:
-    """Objetivo semanal natural: contrato ± jitter estable (puede quedar por debajo o por encima)."""
+    """
+    Objetivo semanal: el contrato con una variación MÍNIMA de minutos (estable por
+    empleado y semana), para que no quede clavado y parezca natural, pero sin
+    alejarse del contrato (el cliente quiere que la semana cuadre).
+    """
     required = int((user.weekly_hours or 0) * 3600)
     if required <= 0:
         return 0
-    bp = _stable_signed_offset(user.id, week_start, REG_SEED + ":target", REG_TARGET_JITTER_BP)
-    return max(int(required * (10000 + bp) / 10000), 0)
+    off_min = _stable_signed_offset(user.id, week_start, REG_SEED + ":target", REG_TARGET_JITTER_MIN)
+    return max(required + off_min * 60, 0)
 
 
-def _detect_overtime(user: User, week_start: date, solid_days: dict[date, int]) -> int:
+def _clear_week_alerts(user: User, week_days: list[date]) -> None:
     """
-    Marca como posible hora extra los días con fichaje REAL completo cuya duración
-    supera la jornada diaria esperada por encima del margen. Registra/actualiza un
-    OvertimeAlert por (empleado, día) conservando el estado 'reviewed'. Devuelve el
-    nº de avisos NUEVOS creados.
+    El cliente NO quiere que se muestren horas extra ni descuadres: se gestionan
+    en otra aplicación. La regularización, por tanto, no genera ninguna alerta y
+    además borra las que hubiera de la semana procesada (de la lógica anterior).
     """
-    expected = _expected_daily_seconds(user)
-    if expected <= 0:
-        return 0
-
-    new_alerts = 0
-    for day, worked in solid_days.items():
-        excess = worked - expected
-        if excess <= OVERTIME_MARGIN_SECONDS:
-            continue
-        alert = OvertimeAlert.query.filter_by(user_id=user.id, date=day).first()
-        if alert:
-            alert.week_start = week_start
-            alert.worked_seconds = int(worked)
-            alert.expected_seconds = int(expected)
-            alert.excess_seconds = int(excess)
-        else:
-            db.session.add(OvertimeAlert(
-                user_id=user.id,
-                week_start=week_start,
-                date=day,
-                worked_seconds=int(worked),
-                expected_seconds=int(expected),
-                excess_seconds=int(excess),
-                reviewed=False,
-            ))
-            new_alerts += 1
-    return new_alerts
-
-
-def _record_shortfall_alert(user: User, week_start: date, worked: int, target: int) -> int:
-    """
-    Registra un aviso de DESCUADRE cuando la semana queda por debajo del objetivo
-    más allá del margen (p. ej. entrada muy tardía sin salida, cuya jornada se capó
-    a las 23:59). Reutiliza la tabla OvertimeAlert con excess_seconds NEGATIVO para
-    distinguirlo de una hora extra. Idempotente por (empleado, semana); conserva el
-    estado 'reviewed'. Devuelve 1 si el aviso es nuevo, 0 si no.
-    """
-    shortfall = target - worked
-    if shortfall <= SHORTFALL_MARGIN_SECONDS:
-        return 0
-
-    existing = OvertimeAlert.query.filter(
+    OvertimeAlert.query.filter(
         OvertimeAlert.user_id == user.id,
-        OvertimeAlert.week_start == week_start,
-        OvertimeAlert.excess_seconds < 0,
-    ).first()
-    if existing:
-        existing.worked_seconds = int(worked)
-        existing.expected_seconds = int(target)
-        existing.excess_seconds = int(worked - target)
-        return 0
+        OvertimeAlert.date >= week_days[0],
+        OvertimeAlert.date <= week_days[-1],
+    ).delete(synchronize_session=False)
 
-    # Slot libre en la semana que no choque con un aviso de horas extra (único por empleado+día)
-    slot = None
-    for i in range(WEEK_DAYS):
-        day = week_start + timedelta(days=i)
-        if not OvertimeAlert.query.filter_by(user_id=user.id, date=day).first():
-            slot = day
+
+def _distribute_capped(
+    target: int, days: list[date], cap_i: dict[date, int], user: User
+) -> dict[date, int]:
+    """
+    Reparte 'target' segundos entre 'days' de modo que:
+      - ningún día supere su tope 'cap_i[día]' (tope del contrato, o el hueco
+        real hasta las 23:59 si la entrada es tardía),
+      - ningún día baje de MIN_DAY_SECONDS,
+      - la suma sea EXACTA a 'target' (mientras haya hueco), con una variación
+        natural de minutos por día (sesgo estable por empleado y día).
+    Si el target no cabe ni llenando todos los días al tope, la semana queda lo
+    más alta posible (best-effort); no se genera aviso (cliente).
+    """
+    if not days or target <= 0:
+        return {d: 0 for d in days}
+
+    n = len(days)
+    base = target / n
+    result: dict[date, int] = {}
+    for d in days:
+        bias = 60 * _stable_signed_offset(user.id, d, REG_SEED + ":dur", REG_DURATION_JITTER_MIN)
+        val = _round_min(base + bias)
+        result[d] = max(MIN_DAY_SECONDS, min(val, cap_i[d]))
+
+    # Corrige minuto a minuto hasta cuadrar el total, respetando [MIN, cap_i].
+    days_sorted = sorted(days)
+    diff = target - sum(result.values())
+    guard = 0
+    while abs(diff) >= 60 and guard < 200000:
+        moved = False
+        for d in days_sorted:
+            if diff >= 60 and result[d] + 60 <= cap_i[d]:
+                result[d] += 60
+                diff -= 60
+                moved = True
+            elif diff <= -60 and result[d] - 60 >= MIN_DAY_SECONDS:
+                result[d] -= 60
+                diff += 60
+                moved = True
+            if abs(diff) < 60:
+                break
+        guard += 1
+        if not moved:
             break
-    if slot is None:
-        return 0
-
-    db.session.add(OvertimeAlert(
-        user_id=user.id,
-        week_start=week_start,
-        date=slot,
-        worked_seconds=int(worked),
-        expected_seconds=int(target),
-        excess_seconds=int(worked - target),
-        reviewed=False,
-    ))
-    return 1
+    return result
 
 
 def regularize_range(
@@ -359,87 +315,84 @@ def _regularize_user_week(
     ).all()
     status_by_date = {s.date: s for s in statuses}
 
-    # Clasifica los días de la semana
+    # El cliente NO quiere horas extra ni descuadres: la semana debe CUADRAR al
+    # contrato y ningún día puede superar el tope, capando también los días REALES.
+    # Por eso ya no se conservan intactos los días "sólidos": todos los días con
+    # actividad se recalculan (preservando la ENTRADA real) y se capan al máximo.
+    _clear_week_alerts(user, week_days)
+
     recs_by_day: dict[date, list[TimeRecord]] = {}
     for r in records:
         recs_by_day.setdefault(r.date, []).append(r)
 
-    solid_days: dict[date, int] = {}      # día -> segundos reales (se conservan)
-    soft_days: dict[date, TimeRecord | None] = {}  # día con actividad blanda -> entrada real a preservar
+    # Día con actividad -> entrada real a preservar (la más temprana; incluida la
+    # preservada en regularizaciones anteriores, RGE). Sin entrada real => None.
+    soft_days: dict[date, TimeRecord | None] = {}
     for day, day_recs in recs_by_day.items():
-        if any(_is_solid(r) for r in day_recs):
-            solid_days[day] = sum(_record_seconds(r) for r in day_recs if _is_solid(r))
-        else:
-            # Día "blando": conserva la entrada real más temprana (si la hay),
-            # incluida la preservada en regularizaciones anteriores (RGE)
-            real_ins = [r for r in day_recs if _has_real_check_in(r)]
-            keep_in = min(real_ins, key=lambda r: r.check_in) if real_ins else None
-            soft_days[day] = keep_in
-
-    # Detección de horas extra: días REALES completos que superan la jornada
-    # esperada por encima del margen. Se registra para avisar al administrador.
-    ur.overtime_alerts += _detect_overtime(user, week_start, solid_days)
+        real_ins = [r for r in day_recs if _has_real_check_in(r)]
+        soft_days[day] = min(real_ins, key=lambda r: r.check_in) if real_ins else None
 
     cap = _max_daily_seconds(user)
-    solid_seconds = sum(solid_days.values())
     target_seconds = _weekly_target_seconds(user, week_start)
-    # El objetivo no puede exceder lo que permiten los topes diarios (tope × días
-    # laborables máximos); si no, la semana quedaría siempre corta y saltaría un
-    # aviso de descuadre espurio (p. ej. 40h con tope 8h: máximo real 40h).
+    # El objetivo se acota a lo que permiten los topes (tope × días laborables),
+    # así nunca "sobran" horas: p. ej. 40h con tope 8h -> máximo real 40h.
     if cap > 0:
         target_seconds = min(target_seconds, cap * MAX_REG_WORKDAYS)
-    remaining = max(target_seconds - solid_seconds, 0)
 
-    # Días candidatos a llevar horas (los blandos donde el empleado vino), ordenados
+    # Días candidatos: aquellos donde el empleado tuvo actividad (día activo y no
+    # bloqueado por ausencia). Solo los que dejan hueco >= MIN hasta las 23:59.
+    def _day_cap(day: date, keep_in: TimeRecord | None) -> int:
+        c = cap if cap > 0 else target_seconds
+        if keep_in and keep_in.check_in:
+            room = int((datetime.combine(day, dt_time(23, 59, 59)) - keep_in.check_in).total_seconds())
+            c = min(c, room)
+        return c
+
     soft_presence = sorted(
         d for d in soft_days
         if _is_employee_active_on_day(user, d)
         and not (status_by_date.get(d) and status_by_date[d].status in BLOCKING_STATUSES)
+        and _day_cap(d, soft_days[d]) >= MIN_DAY_SECONDS
     )
 
-    # Nº de días objetivo: al menos los que vino; si son pocos, completa hasta el
-    # típico. Además, nunca menos de los días necesarios para no superar el tope
-    # diario (ceil(remaining/tope)), de modo que el reparto quepa bajo el límite.
-    typical = max(_target_workday_count(user.weekly_hours or 0) - len(solid_days), 1)
-    cap_days = -(-remaining // cap) if cap > 0 else typical  # ceil(remaining / tope)
+    # Nº de días objetivo: al menos el típico del contrato y nunca menos de los
+    # necesarios para cuadrar sin superar el tope (ceil(target/tope)). Si vino en
+    # pocos días, se completan con días generados hasta cuadrar.
+    typical = max(_target_workday_count(user.weekly_hours or 0), 1)
+    cap_days = -(-target_seconds // cap) if cap > 0 else typical  # ceil(target/tope)
     need_days = max(typical, cap_days)
     target_days = list(soft_presence)
-    if len(target_days) < need_days and remaining > 0:
+    if len(target_days) < need_days and target_seconds > 0:
         target_days = _extend_with_generated_days(
-            user, week_days, set(solid_days) | set(target_days), status_by_date, need_days - len(target_days)
+            user, week_days, set(target_days), status_by_date, need_days - len(target_days)
         )
         target_days = sorted(set(soft_presence) | set(target_days))
 
-    # Borra los registros blandos (los recrearemos de forma coherente)
+    # Borra TODOS los registros de la semana (se recrean capados y cuadrados).
     for day, day_recs in recs_by_day.items():
-        if day in solid_days:
-            continue
         for r in day_recs:
             db.session.delete(r)
             ur.removed_records += 1
 
-    if remaining <= 0 or not target_days:
-        # Las horas reales ya cubren el objetivo (o no vino): solo se limpiaron los blandos.
+    if target_seconds <= 0 or not target_days:
         for day in list(soft_days):
-            _sync_status_after_clear(status_by_date, day, solid_days)
+            _sync_status_after_clear(status_by_date, day, {})
         return ur
 
-    # Reparte "remaining" entre los días objetivo, con jitter natural por día
-    n = len(target_days)
-    base = remaining // n
+    # Reparte el objetivo entre los días, cuadrando exacto dentro de [MIN, tope].
+    cap_by_day = {d: _day_cap(d, soft_days.get(d)) for d in target_days}
+    dur_by_day = _distribute_capped(target_seconds, target_days, cap_by_day, user)
+
     templates = _templates_by_weekday(_user_history_records(user.id, week_start), "histórico empleado")
     group_templates, _ = _get_group_history(user, week_start, pattern_cache)
 
-    created_seconds = 0
     for day in target_days:
+        dur = dur_by_day.get(day, 0)
+        if dur < MIN_DAY_SECONDS:
+            continue
         weekday = day.weekday()
-        dur = base + 60 * _stable_signed_offset(user.id, day, REG_SEED + ":dur", REG_DURATION_JITTER_MIN)
-        dur = max(_round_min(dur), MIN_DAY_SECONDS)
-        # Tope diario: ningún día generado supera el máximo del contrato.
-        if cap > 0:
-            dur = min(dur, cap)
 
-        # Entrada: la real si la hay (día blando con entrada), si no una plausible del patrón
+        # Entrada: la real si la hay (se conserva), si no una plausible del patrón
         keep_in = soft_days.get(day)
         has_real_in = bool(keep_in and keep_in.check_in)
         if has_real_in:
@@ -453,8 +406,8 @@ def _regularize_user_week(
         max_end = datetime.combine(day, dt_time(23, 59, 59))
         if check_out > max_end:
             check_out = max_end
-            # Una entrada REAL no se mueve: el día queda corto y se avisará del
-            # descuadre. Solo las entradas generadas se adelantan para cuadrar.
+            # Una entrada REAL no se mueve (su hueco ya está acotado en cap_by_day);
+            # solo las entradas generadas se adelantan para respetar la duración.
             if not has_real_in:
                 check_in = max(check_out - timedelta(seconds=dur), datetime.combine(day, dt_time(0, 0)))
         if check_out <= check_in:
@@ -466,7 +419,6 @@ def _regularize_user_week(
             modified_by=modified_by,
         ))
         ur.created_records += 1
-        created_seconds += int((check_out - check_in).total_seconds())
 
         st = status_by_date.get(day)
         if st:
@@ -481,11 +433,10 @@ def _regularize_user_week(
             db.session.add(new_st)
             status_by_date[day] = new_st
 
-    # Descuadre: la semana queda claramente por debajo del objetivo (p. ej. una
-    # entrada muy tardía sin salida capada a las 23:59) → aviso para el admin.
-    ur.overtime_alerts += _record_shortfall_alert(
-        user, week_start, solid_seconds + created_seconds, target_seconds
-    )
+    # Días con actividad que quedaron fuera del reparto: limpia su estado colgante.
+    for day in list(soft_days):
+        if day not in target_days:
+            _sync_status_after_clear(status_by_date, day, {})
 
     return ur
 
