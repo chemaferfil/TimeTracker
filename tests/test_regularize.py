@@ -174,6 +174,59 @@ class RegularizeTestCase(unittest.TestCase):
         regularize_range(*rng, today=self.week_start + timedelta(days=14), dry_run=False)
         self.assertEqual(snapshot(), snap1)
 
+    def _generated_day_hours(self, user):
+        """Horas de cada fichaje GENERADO (RG/RGE) de la semana."""
+        rr = TimeRecord.query.filter(
+            TimeRecord.user_id == user.id,
+            TimeRecord.date >= self.week_start,
+            TimeRecord.date <= self.week_start + timedelta(days=6),
+            TimeRecord.check_out.isnot(None),
+        ).all()
+        return [
+            (r.check_out - r.check_in).total_seconds() / 3600
+            for r in rr if "RG" in (r.notes or "")
+        ]
+
+    def test_generated_days_never_exceed_cap_10h(self):
+        # 10h/sem, tope 3h/día. Días inflados (CA ~14h) -> al regularizar, ningún
+        # día generado supera 3h y hacen falta >=4 días para cuadrar las 10h.
+        user = self._user("cap10", 10)
+        for off in (0, 1, 2):
+            day = self.week_start + timedelta(days=off)
+            db.session.add(TimeRecord(
+                user_id=user.id, date=day, check_in=datetime.combine(day, time(9, 0)),
+                check_out=datetime.combine(day, time(23, 59, 59)), notes="CA"))
+        db.session.commit()
+
+        regularize_range(self.week_start, self.week_start + timedelta(days=6),
+                         today=self.week_start + timedelta(days=14), dry_run=False)
+
+        gen = self._generated_day_hours(user)
+        self.assertTrue(gen)
+        self.assertLessEqual(max(gen), 3.0 + 1e-6)      # tope 3h respetado
+        self.assertGreaterEqual(len(gen), 4)            # repartido en >=4 días
+        self.assertGreaterEqual(self._week_hours(user), 8)
+        self.assertLessEqual(self._week_hours(user), 11)
+
+    def test_generated_days_never_exceed_cap_40h(self):
+        # 40h/sem, tope 8h/día. 3 días inflados -> generados <=8h, semana <=40h
+        # (sin horas extra) y sin quedar corta de forma escandalosa.
+        user = self._user("cap40", 40)
+        for off in (0, 1, 2):
+            day = self.week_start + timedelta(days=off)
+            db.session.add(TimeRecord(
+                user_id=user.id, date=day, check_in=datetime.combine(day, time(8, 0)),
+                check_out=datetime.combine(day, time(23, 59, 59)), notes="CA"))
+        db.session.commit()
+
+        regularize_range(self.week_start, self.week_start + timedelta(days=6),
+                         today=self.week_start + timedelta(days=14), dry_run=False)
+
+        gen = self._generated_day_hours(user)
+        self.assertTrue(gen)
+        self.assertLessEqual(max(gen), 8.0 + 1e-6)      # tope 8h respetado
+        self.assertLessEqual(self._week_hours(user), 40.01)  # nunca por encima de 40h
+
     def test_dry_run_does_not_persist(self):
         user = self._user("extra3", 15)
         self._rec(user, 0, 9, 8)

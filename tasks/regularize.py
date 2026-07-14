@@ -53,6 +53,7 @@ REG_SEED = "regularize"
 REG_TARGET_JITTER_BP = 500         # ±5% de variación natural del total semanal
 REG_DURATION_JITTER_MIN = 8        # ±8 min de variación por día
 MIN_DAY_SECONDS = 30 * 60          # no crear días de menos de 30 min
+MAX_REG_WORKDAYS = 5               # tope de días laborables generados (2 libres seguidos)
 AUTO_CLOSE_NOTE = "CA"
 OVERTIME_MARGIN_SECONDS = 3600     # margen para marcar hora extra: > 1h sobre lo esperado
 SHORTFALL_MARGIN_SECONDS = 3600    # margen para marcar descuadre: > 1h por debajo del objetivo semanal
@@ -63,6 +64,36 @@ def _expected_daily_seconds(user: User) -> int:
     if wh <= 0:
         return 0
     return int((wh * 3600) / max(_target_workday_count(wh), 1))
+
+
+def _max_daily_seconds(user: User) -> int:
+    """
+    Tope diario de los fichajes GENERADOS por la regularización (RG/RGE). Tabla
+    acordada con el cliente (jul-2026): ningún día generado supera este máximo,
+    aunque implique repartir la semana en más días. NO afecta a los fichajes
+    REALES completos (se conservan; su exceso ya se avisa como hora extra).
+    Diseño: tope × MAX_REG_WORKDAYS ≥ jornada semanal, así el contrato cabe.
+
+        ≤5h→2h · 7-10h→3h · 12h→4h · 15-20h→5h · 25h→6h · 30h→7h · ≥40h→8h
+    """
+    wh = user.weekly_hours or 0
+    if wh <= 0:
+        return 0
+    if wh <= 5:
+        cap_h = 2
+    elif wh <= 10:
+        cap_h = 3
+    elif wh <= 12:
+        cap_h = 4
+    elif wh <= 20:
+        cap_h = 5
+    elif wh <= 25:
+        cap_h = 6
+    elif wh <= 30:
+        cap_h = 7
+    else:
+        cap_h = 8
+    return cap_h * 3600
 
 
 def _is_generated(record: TimeRecord) -> bool:
@@ -349,8 +380,14 @@ def _regularize_user_week(
     # esperada por encima del margen. Se registra para avisar al administrador.
     ur.overtime_alerts += _detect_overtime(user, week_start, solid_days)
 
+    cap = _max_daily_seconds(user)
     solid_seconds = sum(solid_days.values())
     target_seconds = _weekly_target_seconds(user, week_start)
+    # El objetivo no puede exceder lo que permiten los topes diarios (tope × días
+    # laborables máximos); si no, la semana quedaría siempre corta y saltaría un
+    # aviso de descuadre espurio (p. ej. 40h con tope 8h: máximo real 40h).
+    if cap > 0:
+        target_seconds = min(target_seconds, cap * MAX_REG_WORKDAYS)
     remaining = max(target_seconds - solid_seconds, 0)
 
     # Días candidatos a llevar horas (los blandos donde el empleado vino), ordenados
@@ -360,12 +397,16 @@ def _regularize_user_week(
         and not (status_by_date.get(d) and status_by_date[d].status in BLOCKING_STATUSES)
     )
 
-    # Nº de días objetivo: al menos los que vino; si son pocos, completa hasta el típico
+    # Nº de días objetivo: al menos los que vino; si son pocos, completa hasta el
+    # típico. Además, nunca menos de los días necesarios para no superar el tope
+    # diario (ceil(remaining/tope)), de modo que el reparto quepa bajo el límite.
     typical = max(_target_workday_count(user.weekly_hours or 0) - len(solid_days), 1)
+    cap_days = -(-remaining // cap) if cap > 0 else typical  # ceil(remaining / tope)
+    need_days = max(typical, cap_days)
     target_days = list(soft_presence)
-    if len(target_days) < typical and remaining > 0:
+    if len(target_days) < need_days and remaining > 0:
         target_days = _extend_with_generated_days(
-            user, week_days, set(solid_days) | set(target_days), status_by_date, typical - len(target_days)
+            user, week_days, set(solid_days) | set(target_days), status_by_date, need_days - len(target_days)
         )
         target_days = sorted(set(soft_presence) | set(target_days))
 
@@ -394,6 +435,9 @@ def _regularize_user_week(
         weekday = day.weekday()
         dur = base + 60 * _stable_signed_offset(user.id, day, REG_SEED + ":dur", REG_DURATION_JITTER_MIN)
         dur = max(_round_min(dur), MIN_DAY_SECONDS)
+        # Tope diario: ningún día generado supera el máximo del contrato.
+        if cap > 0:
+            dur = min(dur, cap)
 
         # Entrada: la real si la hay (día blando con entrada), si no una plausible del patrón
         keep_in = soft_days.get(day)
